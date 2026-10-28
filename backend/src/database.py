@@ -1,31 +1,14 @@
 import os
-from models import User
-from sqlmodel import SQLModel, Session, create_engine, select
-import bcrypt
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL, echo=True)
+from sqlmodel import SQLModel, create_engine
+
+from models import Discussion, Message, PressReview, User
+
+MODEL_TABLES = (User, Discussion, Message, PressReview)
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./newsfoundry.db")
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
 
 def init_db():
     SQLModel.metadata.create_all(engine)
-    print("Database initialized successfully")
-
-    # Creating a default user
-    default_email = "test@test.com"
-    default_password = "test"
-
-    with Session(engine) as session:
-        statement = select(User).where(User.email == default_email)
-        user = session.exec(statement).first()
-
-        if not user:
-            session.add(
-                User(
-                    email=default_email,
-                    hashed_password=bcrypt.hashpw(
-                        default_password.encode("utf-8"), bcrypt.gensalt()
-                    ),
-                )
-            )
-            session.commit()

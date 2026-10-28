@@ -1,0 +1,10 @@
+.page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background-color: #2a2a31;
+  background-image: url("/login-background.png");
+  background-position: center;
+  background-size: cover;
+}
