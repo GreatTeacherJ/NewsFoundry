@@ -8,7 +8,7 @@ import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from pydantic import Field as SchemaField
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +18,7 @@ from database import engine, init_db
 from models import Discussion, Message, PressReview, User, utc_now
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
-JWT_ACCESS_TOKEN_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "60"))
+JWT_ACCESS_TOKEN_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "480"))
 JWT_ALGORITHM = "HS256"
 DEMO_ASSISTANT_RESPONSE = "Réponse de démonstration : aucune IA n’est connectée pour le moment."
 DEMO_PRESS_REVIEW = "Revue de presse en attente : aucune source ni IA n’est configurée."
@@ -32,7 +32,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# Schéma « HTTP bearer » : Swagger affiche un simple champ où coller le jeton
+# obtenu via POST /auth/login (le préfixe « Bearer » est ajouté automatiquement).
+# auto_error=False permet de renvoyer 401 (et non 403) quand l'en-tête est absent.
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class Credentials(BaseModel):
@@ -120,11 +123,20 @@ def get_session():
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], session: SessionDep) -> User:
+def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    session: SessionDep,
+) -> User:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentification requise.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     if not JWT_SECRET_KEY:
         raise HTTPException(status_code=503, detail="L’authentification n’est pas configurée.")
     try:
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         user_id = payload.get("sub")
         if not user_id:
             raise jwt.InvalidTokenError

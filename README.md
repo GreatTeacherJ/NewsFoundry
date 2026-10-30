@@ -77,6 +77,12 @@ Assistant de veille et de synthèse d’actualité destiné aux médias et aux j
 
 Les requêtes authentifiées utilisent `Authorization: Bearer <token>`. Une ressource inaccessible ou appartenant à un autre compte renvoie `404`.
 
+### S’authentifier dans Swagger UI (`/docs`)
+
+1. Appeler `POST /auth/login` (bouton « Try it out ») avec un corps JSON `{"email": "...", "password": "..."}` et copier la valeur de `access_token`.
+2. Cliquer sur le bouton **Authorize** et coller le jeton **sans** le préfixe `Bearer` (Swagger l’ajoute lui-même).
+3. Les routes protégées envoient alors `Authorization: Bearer <token>`.
+
 ## Vérifications
 
 Depuis `backend/` :

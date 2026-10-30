@@ -1,3 +1,8 @@
+"use server"
+
+import { cookies } from "next/headers";
+import { ApiError } from "./exportApi";
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type User = { id: number; email: string };
@@ -22,16 +27,18 @@ export type PressReview = {
   created_at: string;
 };
 
-export class ApiError extends Error {
-  status: number;
 
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
+
+export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+
+
+  let token
+  if (path !== "/auth/register" && path !== "/auth/login") {
+    const cookie = await cookies()
+    token = cookie.get("token")?.value
   }
-}
 
-export async function api<T>(path: string, token?: string, options: RequestInit = {}): Promise<T> {
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -55,7 +62,4 @@ export async function api<T>(path: string, token?: string, options: RequestInit 
   return (await response.json()) as T;
 }
 
-export const jsonBody = (value: unknown): Pick<RequestInit, "method" | "body"> => ({
-  method: "POST",
-  body: JSON.stringify(value),
-});
+

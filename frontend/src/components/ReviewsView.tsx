@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, api, PressReview } from "@/lib/api";
+import { api, PressReview } from "@/lib/api";
+import { ApiError } from "@/lib/exportApi";
 import ReviewModal from "@/components/ReviewModal";
 import styles from "./ReviewsView.module.css";
 
@@ -12,9 +13,8 @@ export default function ReviewsView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("newsfoundry_token");
-    if (!token) return;
-    api<PressReview[]>("/press-reviews", token)
+
+    api<PressReview[]>("/press-reviews")
       .then(setReviews)
       .catch((err: Error) => setError(err instanceof ApiError ? err.message : "Impossible de charger les revues."))
       .finally(() => setLoading(false));

@@ -6,14 +6,21 @@
 }
 
 .conversationHeader {
+
   display: flex;
-  min-height: 88px;
+  height: 88px;
+  flex: 0 0 88px;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  padding: 16px 32px;
+  padding: 16px 28px;
   border-bottom: 1px solid #e5e5ef;
-  background: #fff;
+  background: #fbfbfc;
+  gap: 10px;
+
+}
+
+.conversationHeader svg {
+  width: 2rem;
 }
 
 .conversationHeader h1 {
@@ -28,6 +35,19 @@
   font-size: 14px;
 }
 
+.newConversation {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  background: none;
+  border: none;
+  text-decoration: none;
+}
+
+.newConversation:hover {
+  text-decoration: underline;
+}
+
 .reviewButton {
   padding: 12px 18px;
   border: 0;
@@ -40,6 +60,10 @@
 
 .reviewButton:disabled {
   opacity: 0.6;
+}
+
+.reviewButton:hover {
+  background-color: #6f19df;
 }
 
 .messages {

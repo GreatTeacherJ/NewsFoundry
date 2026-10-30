@@ -1,10 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ApiError, api, Discussion, jsonBody, Message, PressReview } from "@/lib/api";
+import { api, Discussion, Message, PressReview } from "@/lib/api";
+import { jsonBody, ApiError } from "@/lib/exportApi";
 import ReviewModal from "@/components/ReviewModal";
 import styles from "./ChatView.module.css";
+import Link from "next/link";
+import Image from "next/image";
 
 type Props = { discussionId?: string };
 
@@ -19,12 +22,11 @@ export default function ChatView({ discussionId }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
   const loadDiscussion = useCallback(async () => {
     if (!discussionId) return;
-    const currentToken = localStorage.getItem("newsfoundry_token");
-    if (!currentToken) return;
+
     try {
       const [currentDiscussion, conversation] = await Promise.all([
-        api<Discussion>(`/discussions/${discussionId}`, currentToken),
-        api<Message[]>(`/discussions/${discussionId}/messages`, currentToken),
+        api<Discussion>(`/discussions/${discussionId}`),
+        api<Message[]>(`/discussions/${discussionId}/messages`),
       ]);
       setDiscussion(currentDiscussion);
       setMessages(conversation);
@@ -42,23 +44,19 @@ export default function ChatView({ discussionId }: Props) {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+  async function sendMessage(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft.trim() || busy) return;
     setError("");
     setBusy(true);
     try {
-      const currentToken = localStorage.getItem("newsfoundry_token");
-      if (!currentToken) {
-        router.replace("/");
-        return;
-      }
+
       let activeId = discussionId;
       if (!activeId) {
-        const created = await api<Discussion>("/discussions", currentToken, jsonBody({ title: draft.trim().slice(0, 80) }));
+        const created = await api<Discussion>("/discussions", jsonBody({ title: draft.trim().slice(0, 80) }));
         activeId = String(created.id);
       }
-      const result = await api<Message[]>(`/discussions/${activeId}/messages`, currentToken, jsonBody({ content: draft.trim() }));
+      const result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: draft.trim() }));
       setMessages((previous) => [...previous, ...result]);
       setDiscussion((previous) => previous ?? { id: Number(activeId), title: draft.trim().slice(0, 80), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
       setDraft("");
@@ -75,12 +73,8 @@ export default function ChatView({ discussionId }: Props) {
     setError("");
     setBusy(true);
     try {
-      const currentToken = localStorage.getItem("newsfoundry_token");
-      if (!currentToken) {
-        router.replace("/");
-        return;
-      }
-      const result = await api<PressReview>(`/discussions/${discussionId}/press-reviews`, currentToken, { method: "POST" });
+
+      const result = await api<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
       setReview(result);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Impossible de générer la revue de presse.");
@@ -91,17 +85,36 @@ export default function ChatView({ discussionId }: Props) {
 
   return (
     <main className={styles.chatPage}>
-      <div className={styles.conversationHeader}>
-        <div>
-          <h1>{discussion?.title ?? (discussionId ? "Chargement de la discussion…" : "Nouvelle discussion")}</h1>
-          <p>{discussionId ? "Conversation enregistrée" : "Démarrez une conversation avec l’assistant"}</p>
+      {discussionId &&
+        <div className={styles.conversationHeader}>
+          <Link className={styles.newConversation}
+            href="/home">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 640"
+              fill="none" stroke="currentColor" strokeWidth="16"
+              strokeLinecap="round" strokeLinejoin="round">
+              <path d="M576 320H64" />
+              <path d="M192 192L64 320L192 448" />
+            </svg>
+            <div>
+              <h1>Nouvelle discussion</h1>
+              <p>Conversation active</p>
+            </div>
+          </Link>
+          <button className={styles.reviewButton} onClick={generateReview} disabled={busy}>Générer une revue de presse</button>
         </div>
-        {discussionId && <button className={styles.reviewButton} onClick={generateReview} disabled={busy}>Générer une revue de presse</button>}
-      </div>
+      }
+
       <section className={styles.messages} aria-label="Messages de la discussion" aria-live="polite">
         {!discussionId && messages.length === 0 && (
+
           <div className={styles.welcome}>
-            <div className={styles.robot} aria-hidden="true">✦</div>
+            <Image
+              src="/botHead.svg"
+              width={82}
+              height={67}
+              alt=""
+            />
+
             <h2>Assistant Revue de Presse IA</h2>
             <p>Posez-moi des questions sur l’actualité récente ou demandez-moi de générer une revue de presse sur un sujet spécifique.</p>
             <strong>Exemples :</strong>
@@ -113,11 +126,14 @@ export default function ChatView({ discussionId }: Props) {
           </div>
         )}
         {discussionId && messages.length === 0 && <p className={styles.empty}>Envoyez un message pour commencer cette discussion.</p>}
+
         {messages.map((message) => (
-          <article key={message.id} className={message.role === "user" ? styles.userMessage : styles.assistantMessage}>
-            <p>{message.content}</p>
-            <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</time>
-          </article>
+          <div>
+
+            <article key={message.id} className={message.role === "user" ? styles.userMessage : styles.assistantMessage}>
+              <p>{message.content}</p>
+              <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</time>
+            </article></div>
         ))}
         <div ref={endRef} />
       </section>
