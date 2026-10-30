@@ -10,3 +10,4 @@ wheels/
 .venv
 
 .env
+backend/src/pydanti_agent.py
