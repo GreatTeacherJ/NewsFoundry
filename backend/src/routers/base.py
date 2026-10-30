@@ -4,20 +4,16 @@ from typing import Annotated
 
 import bcrypt
 import jwt
-
-from fastapi import Depends, HTTPException, status, APIRouter
-
-
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from pydantic import Field as SchemaField
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from database import engine, init_db
-from models import Discussion, Message, PressReview, User, utc_now
-
+from database import engine
 from lib.callModele import call_modele
+from models import Discussion, Message, PressReview, User, utc_now
 
 router = APIRouter(tags=["base"]) 
 

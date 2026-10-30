@@ -10,14 +10,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
-from typing import Annotated, Any, Literal, LiteralString, TypeVar
+from typing import Annotated, Any, Literal, LiteralString, ParamSpec, TypeVar
 
 import fastapi
 import logfire
 from fastapi import Depends, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from typing_extensions import ParamSpec, TypedDict
-
 from pydantic_ai import (
     Agent,
     ModelMessage,
@@ -33,6 +31,7 @@ from pydantic_ai.capabilities import Caching
 #Rajout pour utiliser les endpoint de mammouth
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from typing_extensions import TypedDict
 
 #logfire est une sorte d'API pour avoir des information sur le modéle et les requete, cela demande un compte
 # 'if-token-present' means nothing will be sent (and the example will work) if you don't have logfire configured
