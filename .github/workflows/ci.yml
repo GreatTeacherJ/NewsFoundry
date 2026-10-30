@@ -22,7 +22,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run ruff check src tests
       - run: uv run pytest -q
-      - run: uv run lib/callModele.py
+      - run: uv run src/lib/callModele.py
         env:
           DATABASE_URL: sqlite:///./ci.db
           JWT_SECRET_KEY: ci-test-secret
