@@ -9,7 +9,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-import main
+import src.routers.base as base 
+
+import src.main as main
 
 engine = create_engine(
     "sqlite://",
@@ -23,7 +25,7 @@ def override_get_session():
         yield session
 
 
-main.app.dependency_overrides[main.get_session] = override_get_session
+main.app.dependency_overrides[base.get_session] = override_get_session
 client = TestClient(main.app)
 
 
