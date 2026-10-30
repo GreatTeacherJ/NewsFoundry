@@ -45,7 +45,7 @@ model = OpenAIChatModel(
 )
 #encapsule un modèle de langage et gère la boucle d'interaction avec lui 
 # (envoi des messages, réception, appels d'outils éventuels, validation de la sortie).
-agent = Agent('openai:gpt-5.2', capabilities=[Caching()])
+agent = Agent(model, capabilities=[Caching()])
 #dossier du script.
 THIS_DIR = Path(__file__).parent
 

@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from database import engine, init_db
 from models import Discussion, Message, PressReview, User, utc_now
 
+from lib.callModele import call_modele
 
 router = APIRouter(tags=["base"]) 
 
@@ -274,7 +275,7 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     if not content:
         raise HTTPException(status_code=422, detail="Le message ne peut pas être vide.")
     message = Message(discussion_id=discussion.id, role="user", content=content)
-    assistant = Message(discussion_id=discussion.id, role="assistant", content=DEMO_ASSISTANT_RESPONSE)
+    assistant = Message(discussion_id=discussion.id, role="assistant", content=call_modele(content))
     discussion.updated_at = utc_now()
     session.add(message)
     session.add(assistant)
