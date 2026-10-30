@@ -7,7 +7,7 @@ from pydantic_ai.models.test import TestModel
 # "test" = faux modèle (aucune clé requise), sinon un vrai modèle
 MODEL_NAME = os.getenv("AI_MODEL", "test")
 
-model = TestModel(custom_output_text="Je suis un agent teste, message suivant bien reçu : ") if MODEL_NAME == "test" else MODEL_NAME
+model = TestModel(custom_output_text="Je suis un agent teste aucune IA n'est chargées, le message suivant bien reçu : ") if MODEL_NAME == "test" else MODEL_NAME
 
 chat_agent = Agent(
     model,
