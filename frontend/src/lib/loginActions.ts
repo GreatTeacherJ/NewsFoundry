@@ -12,6 +12,7 @@ export async function loginAction(email: string, password: string) {
     // Appel serveur -> serveur, pas de CORS ici
     const res = await api<{ access_token: string }>("/auth/login", jsonBody({ email, password }));
 
+    console.log("token: ", res.access_token)
     // Next 15+ : cookies() est asynchrone, d'où le await
     const cookieStore = await cookies();
     cookieStore.set("token", res.access_token, {

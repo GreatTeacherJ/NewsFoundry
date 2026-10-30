@@ -132,6 +132,13 @@
   text-align: left;
 }
 
+.wrapperMessage {
+  display: flex;
+  flex-direction: row;
+  width: auto;
+  gap: 10px
+}
+
 .userMessage,
 .assistantMessage {
   display: grid;
@@ -142,6 +149,14 @@
   font-size: 15px;
   line-height: 24px;
   white-space: pre-wrap;
+}
+
+.right {
+  justify-content: end;
+}
+
+.left {
+  justify-content: start;
 }
 
 .userMessage {
@@ -163,6 +178,11 @@
   line-height: 16px;
 }
 
+.chatIcon {
+  width: 2em;
+  border-radius: 50%;
+}
+
 .empty {
   margin: auto;
   color: #717182;
@@ -176,15 +196,21 @@
   font-size: 14px;
 }
 
+.wrapperComposer {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: auto;
+  justify-content: center;
+}
+
 .composer {
   display: flex;
-  width: calc(100% - 64px);
+  width: 100%;
   max-width: 920px;
   min-height: 60px;
   align-items: center;
-  gap: 12px;
   align-self: center;
-  margin: 0 auto 24px;
   padding: 8px 12px;
   border: 1px solid #cacad5;
   border-radius: 8px;
@@ -212,7 +238,7 @@
   color: #838392;
 }
 
-.composer button {
+.composerButton {
   display: grid;
   width: 44px;
   height: 40px;
