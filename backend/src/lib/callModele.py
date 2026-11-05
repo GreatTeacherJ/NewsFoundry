@@ -37,14 +37,18 @@ class ParamsSearchNews(BaseModel):
     latest_publish_date :  dt| None = Field(default=None, alias="latest-publish-date")
     categories : str | None = None
 
-class NeedWorld(BaseModel):
-    kind: Literal["need_world"] = "need_world"
-    appel: Literal["top-news", "search-news"]
-    parametres: ParamsTopNews | ParamsSearchNews
 
 class ResModel(BaseModel):
     kind: Literal["reviews", "assistant"]
     content : str
+
+class NeedTopNews(BaseModel):
+    kind: Literal["top-news"] = "top-news"
+    parametres: ParamsTopNews
+
+class NeedSearchNews(BaseModel):
+    kind: Literal["search-news"] = "search-news"
+    parametres: ParamsSearchNews
 
 
 API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
@@ -52,19 +56,24 @@ API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
 # "test" = faux modèle (aucune clé requise), sinon un vrai modèle
 MODEL_NAME = os.getenv("AI_MODEL", "test")
 
-model = TestModel(custom_output_args={"kind":"content","content":"Je suis un agent teste aucune IA n'est chargées, le message suivant bien reçu : "}) if MODEL_NAME == "test" else MODEL_NAME
+model = (
+    TestModel(
+        custom_output_args={"kind": "assistant", "content": "Je suis un agent test, aucune IA n'est chargée."})
+    if MODEL_NAME == "test"
+    else MODEL_NAME
+)
 
 chat_agent = Agent(
     model,
     system_prompt="Tu es un assistant de revue de presse.",
-    output_type= [NeedWorld, ResModel]    
+    output_type= ResModel #Ajouter les autres type de sortie pour le modele final
 )
 
-model_2 = TestModel(custom_output_args={"appel": "top-news", "parametres": {"source_country": "fr", "language": "fr"}})
+model_2 = TestModel(custom_output_args={"kind": "top-news", "parametres": {"source_country": "fr", "language": "fr"}})
 
 chat_agent_2 = Agent(
     model_2,
-    output_type=NeedWorld
+    output_type=NeedTopNews
 )
 
 review = {"title":"", "date":utc_now, "content":"""**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
@@ -81,25 +90,33 @@ review = {"title":"", "date":utc_now, "content":"""**REVUE DE PRESSE POLITIQUE -
 
 
 def call_modele_chat(prompt:str) -> tuple[ResModel, str]:
+
     #on commence par envoyer la demande de l'utilisateur au model
     print("prompt reçu : ", prompt)
     res = chat_agent_2.run_sync(user_prompt=prompt, instructions=PROMPT_SYSTEME_BASE)       
     result = res.output
     print("Premiére reponse model reçu : ", result)
 
-    final_res:str
-    res_new:str | None = None
-
     match result : 
         # Si le model à besoin d'info en plus il renvoie un type NeedWorld
-        case NeedWorld():
-            final_res, res_new = call_world_new(result.parametres)
+        case NeedTopNews() | NeedSearchNews():
+            #Récupération des nouvelles
+            res_world_new = call_world_new(result)
+            res_new = json.dumps(res_world_new)
+            
+            #Elaborations du nouveau prompt systeme avec les new
+            prompt_systeme_with_news = PROMPT_SYSTEME_WITH_NEWS+ res_new
+            #Recéption de la nouvelle reponse
+            res = chat_agent.run_sync(user_prompt=prompt, instructions=prompt_systeme_with_news).output
+            
+            return res, res_new
         case ResModel():
-            final_res =  result
+            return result, None
+        case _:
+            raise TypeError(f"Sortie inattendue : {type(result)}")
+   
 
-    return final_res, json.dumps(res_new)
-
-def call_world_new(result:NeedWorld):        
+def call_world_new(result:NeedTopNews | NeedSearchNews):        
 
     params = result.parametres   
     
@@ -111,28 +128,20 @@ def call_world_new(result:NeedWorld):
 )
     # bool reste un bool Python (True), or l'API attend "true" : on convertit   
     data = {k: str(v).lower() if isinstance(v, bool) else v for k, v in data.items()}
-    query = urlencode(data) 
-        
-    url = "https://api.worldnewsapi.com/"+result.appel +"?"+ query
-    print("url : ", url)               
-    
-    url = "https://api.worldnewsapi.com/top-news?source-country=fr&language=fr&date=2026-10-30"            
 
-    headers = {
-        'x-api-key': API_KEY_WORLD
-    }
+    url = f"https://api.worldnewsapi.com/{result.kind}?{urlencode(data)}" 
+    print("url : ", url)           
+
     #on récupére les infos de worls News api
-    res = requests.get(url, headers=headers)
+    res = requests.get(url, headers={"x-api-key": API_KEY_WORLD}, timeout=50)
 
-    if res.status_code != 200:
-        return f"Error: {res}"
-    res_new = res.json()        
-
-    prompt_systeme_with_news = PROMPT_SYSTEME_WITH_NEWS+ json.dumps(res_new)
-    res = chat_agent.run_sync(user_prompt=prompt, instructions=prompt_systeme_with_news)
-    return res.output, res_new
+    res.raise_for_status()       
+    print("reponse api news world ok !")
+    return res.json()
 
 if __name__ == '__main__':
+    
+    """
     prompt = "teste prompt"
-    result = call_modele_chat("teste prompt")
-    print(f"reponse modele : {result}")
+    result, _ = call_modele_chat("teste prompt")
+    print(f"reponse modele : {result}")"""
