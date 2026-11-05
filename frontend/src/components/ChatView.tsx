@@ -9,6 +9,7 @@ import styles from "./ChatView.module.css";
 import Link from "next/link";
 import Image from "next/image";
 
+
 type Props = { discussionId?: string };
 
 export default function ChatView({ discussionId }: Props) {
@@ -58,8 +59,15 @@ export default function ChatView({ discussionId }: Props) {
         //Récuperer l'id de la nouvelle session
         activeId = String(created.id);
       }
-      //Ecrit uun nouveau message dans la discussion et renvoie la reponse
-      const result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: draft.trim() }));
+      //Ecrit un nouveau message dans la discussion et renvoie la reponse
+      let result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: draft.trim() }));
+
+      if (result[1].role === "reviews") {
+        //Code pour créer une reviews
+        result[1].content = "Reviews sauvegarder dans la rubrique Revue de presse"
+        result[1].role = "assistant"
+      }
+
       setMessages((previous) => [...previous, ...result]);
       setDiscussion((previous) => previous ?? { id: Number(activeId), title: draft.trim().slice(0, 80), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
       setDraft("");
@@ -152,7 +160,6 @@ export default function ChatView({ discussionId }: Props) {
                   <path d="M20.6668 22V20.6667C20.6668 19.9594 20.3859 19.2811 19.8858 18.781C19.3857 18.281 18.7074 18 18.0002 18H14.0002C13.2929 18 12.6146 18.281 12.1145 18.781C11.6144 19.2811 11.3335 19.9594 11.3335 20.6667V22" strokeWidth="1.33333" strokeLinecap="round" strokeLinejoin="round" stroke="white" />
                   <path d="M18.6668 12.6667C18.6668 14.1394 17.4729 15.3333 16.0002 15.3333C14.5274 15.3333 13.3335 14.1394 13.3335 12.6667C13.3335 11.1939 14.5274 10 16.0002 10C17.4729 10 18.6668 11.1939 18.6668 12.6667Z" strokeWidth="1.33333" strokeLinecap="round" strokeLinejoin="round" stroke="white" />
                 </svg>
-
               </span>
             }
           </div>

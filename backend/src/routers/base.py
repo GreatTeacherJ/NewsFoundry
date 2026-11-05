@@ -12,8 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from database import engine
-from lib.callModele import call_modele
-from models import Discussion, Message, PressReview, User, utc_now
+from lib.callModele import call_modele_chat
+from models import Discussion, Message, PressReview, User, Source, utc_now
 
 router = APIRouter(tags=["base"]) 
 
@@ -23,14 +23,10 @@ JWT_ALGORITHM = "HS256"
 DEMO_ASSISTANT_RESPONSE = "Réponse de démonstration : aucune IA n’est connectée pour le moment."
 DEMO_PRESS_REVIEW = "Revue de presse en attente : aucune source ni IA n’est configurée."
 
-
 # Schéma « HTTP bearer » : Swagger affiche un simple champ où coller le jeton
 # obtenu via POST /auth/login (le préfixe « Bearer » est ajouté automatiquement).
 # auto_error=False permet de renvoyer 401 (et non 403) quand l'en-tête est absent.
 bearer_scheme = HTTPBearer(auto_error=False)
-
-
-
 
 class Credentials(BaseModel):
     email: EmailStr
@@ -162,10 +158,6 @@ def get_owned_discussion(session: Session, discussion_id: int, owner_id: int) ->
         raise HTTPException(status_code=404, detail="Discussion introuvable.")
     return discussion
 
-
-
-
-
 @router.get("/")
 def health_check():
     return {"message": "NewsFoundry API opérationnelle"}
@@ -222,7 +214,7 @@ def create_discussion(payload: DiscussionCreate, user: CurrentUser, session: Ses
     discussion = Discussion(owner_id=user.id, title=title)
     session.add(discussion)
     session.commit()
-    session.refresh(discussion)
+    session.refresh(discussion)    
     return discussion
 
 
@@ -271,8 +263,13 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     if not content:
         raise HTTPException(status_code=422, detail="Le message ne peut pas être vide.")
     message = Message(discussion_id=discussion.id, role="user", content=content)
-    assistant = Message(discussion_id=discussion.id, role="assistant", content=call_modele(content))
+    response_ai, source_ai = call_modele_chat(content)    
+    assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
     discussion.updated_at = utc_now()
+    #si une source est renvoyer on l'enregistre dans la base de données
+    if(source_ai):
+        source = Source(discussion_id=discussion.id, content=source_ai, )
+        session.add(source)
     session.add(message)
     session.add(assistant)
     session.add(discussion)

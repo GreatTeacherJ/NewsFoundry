@@ -37,3 +37,9 @@ class PressReview(SQLModel, table=True):
     title: str = Field(max_length=200)
     content: str
     created_at: datetime = Field(default_factory=utc_now)
+
+class Source(SQLModel, table=True):
+    id : int | None = Field(default=None, primary_key=True)
+    discussion_id: int = Field(foreign_key="discussion.id",index=True)
+    content: str
+    created_at: datetime = Field(default_factory=utc_now)

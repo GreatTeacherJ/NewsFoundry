@@ -22,3 +22,6 @@ export type PressReview = {
     content: string;
     created_at: string;
 };
+
+
+

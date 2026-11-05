@@ -2,9 +2,9 @@ import os
 
 from sqlmodel import SQLModel, create_engine
 
-from models import Discussion, Message, PressReview, User
+from models import Discussion, Message, PressReview, User, Source
 
-MODEL_TABLES = (User, Discussion, Message, PressReview)
+MODEL_TABLES = (User, Discussion, Message, PressReview, Source)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./newsfoundry.db")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
