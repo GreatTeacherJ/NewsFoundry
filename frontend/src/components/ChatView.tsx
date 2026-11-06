@@ -9,6 +9,10 @@ import styles from "./ChatView.module.css";
 import Link from "next/link";
 import Image from "next/image";
 
+//Mise en forme Markdown
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+
 
 type Props = { discussionId?: string };
 
@@ -63,9 +67,7 @@ export default function ChatView({ discussionId }: Props) {
       let result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: draft.trim() }));
 
       if (result[1].role === "reviews") {
-        //Code pour créer une reviews
-        result[1].content = "Reviews sauvegarder dans la rubrique Revue de presse"
-        result[1].role = "assistant"
+        //Code pour créer une reviews        
       }
 
       setMessages((previous) => [...previous, ...result]);
@@ -80,6 +82,14 @@ export default function ChatView({ discussionId }: Props) {
   }
 
   async function generateReview() {
+
+    const toReviews = messages.filter((m) => m.role === "reviews")
+
+    if (toReviews.length < 1) {
+      setError("Aucun revue trouvée. Demander au chat de vous en créer une. ")
+      return
+    }
+
     if (!discussionId) return;
     setError("");
     setBusy(true);
@@ -93,6 +103,7 @@ export default function ChatView({ discussionId }: Props) {
       setBusy(false);
     }
   }
+
 
   return (
     <main className={styles.chatPage}>
@@ -140,7 +151,7 @@ export default function ChatView({ discussionId }: Props) {
 
         {messages.map((message) => (
           <div key={message.id} className={message.role === "user" ? (styles.wrapperMessage + " " + styles.right) : (styles.wrapperMessage + " " + styles.left)}>
-            {message.role === "assistant" &&
+            {message.role !== "user" &&
               <span className={styles.chatIcon}>
                 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M0 16C0 7.16344 7.16344 0 16 0C24.8366 0 32 7.16344 32 16C32 24.8366 24.8366 32 16 32C7.16344 32 0 24.8366 0 16Z" fill="#ECEEF2" />
@@ -149,9 +160,20 @@ export default function ChatView({ discussionId }: Props) {
               </span>
             }
 
-            <article className={message.role === "user" ? styles.userMessage : styles.assistantMessage}>
-              <p>{message.content}</p>
-              <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</time>
+            <article className={message.role === "user" ? styles.userMessage : (message.role === "assistant" ? styles.assistantMessage : styles.reviewsMessage)}>
+
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {message.content}
+              </ReactMarkdown>
+              <time dateTime={message.created_at}>
+                {new Date(message.created_at).toLocaleString("fr-FR", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </time>
             </article>
             {message.role === "user" &&
               <span className={styles.chatIcon}>

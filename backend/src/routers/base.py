@@ -15,6 +15,7 @@ from database import engine
 from lib.callModele import call_modele_chat
 from models import Discussion, Message, PressReview, User, Source, utc_now
 
+
 router = APIRouter(tags=["base"]) 
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
@@ -329,11 +330,13 @@ def list_press_reviews(user: CurrentUser, session: SessionDep):
 )
 def create_press_review(discussion_id: int, user: CurrentUser, session: SessionDep):
     discussion = get_owned_discussion(session, discussion_id, user.id)
+    #On récupére le dernier message qui porte le role de reviews dans les message de la discussion
+    reviews_discussion = session.exec(select(Message).where(Message.discussion_id == discussion_id).where(Message.role == "reviews").order_by(Message.created_at.desc())).first()
     review = PressReview(
         owner_id=user.id,
         discussion_id=discussion.id,
         title=f"Revue de presse — {discussion.title}",
-        content=DEMO_PRESS_REVIEW,
+        content=reviews_discussion.content,
     )
     session.add(review)
     session.commit()

@@ -53,12 +53,24 @@ class NeedSearchNews(BaseModel):
 
 API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
 
+review = """**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
+
+**Synthèse hebdomadaire des principales actualités politiques :**
+
+• **Réforme économique** : Le gouvernement a présenté son plan de relance économique avec des mesures ciblées sur l'emploi et l'innovation. Les réactions sont mitigées entre opposition et majorité.
+
+• **Relations internationales** : Préparation du sommet européen avec focus sur les questions énergétiques et la coopération en matière de défense.
+
+• **Politique intérieure** : Débats parlementaires sur la réforme du système de santé, avec des amendements proposés par différents groupes politiques.
+
+**Perspectives** : Les prochaines semaines seront cruciales pour l'adoption des mesures proposées et leur impact sur l'opinion publique."""
+
 # "test" = faux modèle (aucune clé requise), sinon un vrai modèle
 MODEL_NAME = os.getenv("AI_MODEL", "test")
 
 model = (
     TestModel(
-        custom_output_args={"kind": "assistant", "content": "Je suis un agent test, aucune IA n'est chargée."})
+        custom_output_args={"kind": "reviews", "content": review})
     if MODEL_NAME == "test"
     else MODEL_NAME
 )
@@ -76,17 +88,7 @@ chat_agent_2 = Agent(
     output_type=NeedTopNews
 )
 
-review = {"title":"", "date":utc_now, "content":"""**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
 
-**Synthèse hebdomadaire des principales actualités politiques :**
-
-• **Réforme économique** : Le gouvernement a présenté son plan de relance économique avec des mesures ciblées sur l'emploi et l'innovation. Les réactions sont mitigées entre opposition et majorité.
-
-• **Relations internationales** : Préparation du sommet européen avec focus sur les questions énergétiques et la coopération en matière de défense.
-
-• **Politique intérieure** : Débats parlementaires sur la réforme du système de santé, avec des amendements proposés par différents groupes politiques.
-
-**Perspectives** : Les prochaines semaines seront cruciales pour l'adoption des mesures proposées et leur impact sur l'opinion publique."""}
 
 
 def call_modele_chat(prompt:str) -> tuple[ResModel, str]:

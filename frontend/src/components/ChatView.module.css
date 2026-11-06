@@ -140,7 +140,8 @@
 }
 
 .userMessage,
-.assistantMessage {
+.assistantMessage,
+.reviewsMessage {
   display: grid;
   max-width: min(76%, 640px);
   gap: 12px;
@@ -171,12 +172,20 @@
   color: #2a2a31;
 }
 
+.reviewsMessage {
+  align-self: flex-start;
+  background: #f5e1aa;
+  color: #2a2a31;
+}
+
 .userMessage time,
-.assistantMessage time {
+.assistantMessage time,
+.reviewsMessage time {
   color: #9999ab;
   font-size: 12px;
   line-height: 16px;
 }
+
 
 .chatIcon {
   width: 2em;

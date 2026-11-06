@@ -6,7 +6,6 @@ import { ReactNode, useEffect, useState } from "react";
 import { api, Discussion } from "@/lib/api";
 import styles from "./AppShell.module.css";
 import Image from "next/image";
-import Header from "./Header";
 import { logoutAction } from "@/lib/loginActions";
 
 type Props = {
@@ -29,23 +28,6 @@ export default function AppShell({ children }: Props) {
 
   }, [pathname, router]);
 
-  async function createDiscussion() {
-
-    try {
-      const discussion = await api<Discussion>("/discussions", {
-        method: "POST",
-        body: JSON.stringify({ title: "Nouvelle discussion" }),
-        headers: { "Content-Type": "application/json" },
-      });
-      router.push(`/chat/${discussion.id}`);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Impossible de créer la discussion.",
-      );
-    }
-  }
 
   function logout() {
     logoutAction()
