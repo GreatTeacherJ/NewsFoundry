@@ -8,6 +8,7 @@ import ReviewModal from "@/components/ReviewModal";
 import styles from "./ChatView.module.css";
 import Link from "next/link";
 import Image from "next/image";
+import GenerateReviewModal from "./GenerateReviewModal";
 
 //Mise en forme Markdown
 import ReactMarkdown from "react-markdown";
@@ -25,6 +26,7 @@ export default function ChatView({ discussionId }: Props) {
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState<PressReview | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const [openModal, setOpenModal] = useState<boolean>(false)
   const loadDiscussion = useCallback(async () => {
     if (!discussionId) return;
 
@@ -92,11 +94,13 @@ export default function ChatView({ discussionId }: Props) {
 
     if (!discussionId) return;
     setError("");
-    setBusy(true);
+    setOpenModal(false)
     try {
 
       const result = await api<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
       setReview(result);
+
+      setOpenModal(false)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Impossible de générer la revue de presse.");
     } finally {
@@ -122,7 +126,7 @@ export default function ChatView({ discussionId }: Props) {
               <p>Conversation active</p>
             </div>
           </Link>
-          <button className={styles.reviewButton} onClick={generateReview} disabled={busy}>Générer une revue de presse</button>
+          <button className={styles.reviewButton} onClick={() => setOpenModal(true)} disabled={busy}>Générer une revue de presse</button>
         </div>
       }
 
@@ -200,7 +204,7 @@ export default function ChatView({ discussionId }: Props) {
           </svg>
         </button>
       </form>
-      {review && <ReviewModal review={review} onClose={() => setReview(null)} />}
+      {openModal && <GenerateReviewModal onThemeChange={() => { }} generateReview={generateReview} setOpenModal={setOpenModal} />}
     </main>
   );
 }

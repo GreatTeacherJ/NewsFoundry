@@ -11,7 +11,16 @@ from dotenv import load_dotenv  # uv add python-dotenv
 from typing import Literal
 from datetime import date as dt
 from urllib.parse import urlencode
-from models import utc_now
+from models import Message, Source
+
+#Rajout pour utiliser les endpoint de mammouth
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.messages import (
+    ModelMessage, ModelRequest, ModelResponse, UserPromptPart, TextPart,
+)
+
+from lib.prompt_systeme import PROMPT_SYSTEME_BASE
 
 # Charge le .env AVANT toute lecture de variable d'environnement
 load_dotenv()
@@ -19,12 +28,14 @@ load_dotenv()
 
 class ParamsTopNews(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-     
-    source_country : str = Field(alias="source-country")
-    language : str
-    date : dt | None = None
-    headlines_only : bool | None = Field(default=None, alias="headlines-only")
-    max_news_per_cluster : int | None = Field(default=None, alias="max-news-per-cluster")
+
+    source_country: str = Field(alias="source-country", pattern=r"^[a-z]{2}$")
+    language: str = Field(pattern=r"^[a-z]{2}$")
+    date: dt | None = None
+    headlines_only: bool | None = Field(default=None, alias="headlines-only")
+    max_news_per_cluster: int | None = Field(
+        default=None, alias="max-news-per-cluster", ge=1, le=10
+    )
 
 class ParamsSearchNews(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -52,6 +63,7 @@ class NeedSearchNews(BaseModel):
 
 
 API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
+MAMMOUTH_KEY = os.getenv("MAMMOUTH_KEY")
 
 review = """**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
 
@@ -68,50 +80,84 @@ review = """**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
 # "test" = faux modèle (aucune clé requise), sinon un vrai modèle
 MODEL_NAME = os.getenv("AI_MODEL", "test")
 
+MAMMOUTH = OpenAIChatModel(
+    'mammouth-recommended',
+    provider=OpenAIProvider(base_url="https://api.mammouth.ai/v1", api_key=MAMMOUTH_KEY),
+)
+
 model = (
     TestModel(
         custom_output_args={"kind": "reviews", "content": review})
     if MODEL_NAME == "test"
-    else MODEL_NAME
+    else MAMMOUTH
 )
 
 chat_agent = Agent(
     model,
-    system_prompt="Tu es un assistant de revue de presse.",
-    output_type= ResModel #Ajouter les autres type de sortie pour le modele final
+    system_prompt=PROMPT_SYSTEME_BASE,
+    output_type= ResModel | NeedTopNews | NeedSearchNews 
 )
 
-model_2 = TestModel(custom_output_args={"kind": "top-news", "parametres": {"source_country": "fr", "language": "fr"}})
+model_2 = (TestModel(custom_output_args={"kind": "top-news", "parametres": {"source_country": "fr", "language": "fr"}})if MODEL_NAME == "test"
+    else MAMMOUTH)
 
 chat_agent_2 = Agent(
     model_2,
-    output_type=NeedTopNews
+    output_type=NeedTopNews | NeedSearchNews
 )
 
 
+def to_pydantic_history(db_messages:list[Message]) -> list[ModelMessage]:
+    """Convertit les messages de la base en historique PydanticAI."""
+    history: list[ModelMessage] = []
+    for msg in db_messages:
+        if msg.role == "user":
+            history.append(ModelRequest(parts=[UserPromptPart(content=msg.content)]))
+        else:
+            history.append(ModelResponse(parts=[TextPart(content=msg.content)]))
+    return history
 
 
-def call_modele_chat(prompt:str) -> tuple[ResModel, str]:
+
+def call_modele_chat(prompt:str, db_messages:list[Message], db_source:list[Source]) -> tuple[ResModel, str]:
 
     #on commence par envoyer la demande de l'utilisateur au model
     print("prompt reçu : ", prompt)
-    res = chat_agent_2.run_sync(user_prompt=prompt, instructions=PROMPT_SYSTEME_BASE)       
-    result = res.output
+
+    #Ajout de la discusion et des sources existante
+    db_source_completed = db_source   
+
+    followup = (
+        f"Question de l'utilisateur : {prompt}\n\n"
+        f"Données de la conversations dans l'ordre reçu:\n"
+        f"{json.dumps(db_source_completed)}\n\n"
+        f"Réponds en utilisant uniquement ces données."
+    )
+    #Recéption de la nouvelle reponse
+    result = chat_agent.run_sync(user_prompt=followup, message_history=to_pydantic_history(db_messages)).output     
+    
     print("Premiére reponse model reçu : ", result)
 
     match result : 
         # Si le model à besoin d'info en plus il renvoie un type NeedWorld
         case NeedTopNews() | NeedSearchNews():
+            print("Demande d'info à worldNews")
             #Récupération des nouvelles
             res_world_new = call_world_new(result)
-            res_new = json.dumps(res_world_new)
             
+             #On ajoute le nouveau resultat à la liste
+            db_source_completed.append(res_world_new)
             #Elaborations du nouveau prompt systeme avec les new
-            prompt_systeme_with_news = PROMPT_SYSTEME_WITH_NEWS+ res_new
+            followup = (
+                f"Question de l'utilisateur : {prompt}\n\n"
+                f"Données de la conversations dans l'ordre reçu:\n"
+                f"{json.dumps(db_source_completed)}\n\n"
+                f"Réponds en utilisant uniquement ces données."
+            )
             #Recéption de la nouvelle reponse
-            res = chat_agent.run_sync(user_prompt=prompt, instructions=prompt_systeme_with_news).output
+            result = chat_agent.run_sync(user_prompt=followup, message_history=to_pydantic_history(db_messages)).output
             
-            return res, res_new
+            return result, json.dumps(res_world_new, ensure_ascii=False)
         case ResModel():
             return result, None
         case _:

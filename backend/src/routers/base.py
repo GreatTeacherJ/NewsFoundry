@@ -264,7 +264,13 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     if not content:
         raise HTTPException(status_code=422, detail="Le message ne peut pas être vide.")
     message = Message(discussion_id=discussion.id, role="user", content=content)
-    response_ai, source_ai = call_modele_chat(content)    
+    
+    #Récupération des messages de la conversation
+    db_messages = session.exec(
+        select(Message).where(Message.discussion_id == discussion_id).order_by(Message.created_at, Message.id)
+    ).all()
+    db_sources = session.exec(select(Source.discussion_id == discussion_id).order_by(Source.created_at)).all()
+    response_ai, source_ai = call_modele_chat(content, db_messages, db_sources)    
     assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
     discussion.updated_at = utc_now()
     #si une source est renvoyer on l'enregistre dans la base de données
@@ -278,7 +284,6 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     session.refresh(message)
     session.refresh(assistant)
     return [message, assistant]
-
 
 @router.patch("/discussions/{discussion_id}/messages/{message_id}", response_model=MessageResponse)
 def update_message(
@@ -321,7 +326,6 @@ def list_press_reviews(user: CurrentUser, session: SessionDep):
     return session.exec(
         select(PressReview).where(PressReview.owner_id == user.id).order_by(PressReview.created_at.desc())
     ).all()
-
 
 @router.post(
     "/discussions/{discussion_id}/press-reviews",
