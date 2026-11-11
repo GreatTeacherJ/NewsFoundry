@@ -40,6 +40,10 @@ class PressReview(SQLModel, table=True):
 
 class Source(SQLModel, table=True):
     id : int | None = Field(default=None, primary_key=True)
-    discussion_id: int = Field(foreign_key="discussion.id",index=True)
+    url:str = Field(index=True)
     content: str
     created_at: datetime = Field(default_factory=utc_now)
+
+class DiscussionSource(SQLModel, table=True):
+    discussion_id:int = Field(foreign_key="discussion.id", ondelete="CASCADE", primary_key=True)
+    source_id:int  = Field(foreign_key="source.id", ondelete="CASCADE", primary_key=True)

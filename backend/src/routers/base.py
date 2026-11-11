@@ -263,27 +263,18 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=422, detail="Le message ne peut pas être vide.")
-    message = Message(discussion_id=discussion.id, role="user", content=content)
-    
-    #Récupération des messages de la conversation
-    db_messages = session.exec(
-        select(Message).where(Message.discussion_id == discussion_id).order_by(Message.created_at, Message.id)
-    ).all()
-    db_sources = session.exec(select(Source).where(Source.discussion_id == discussion_id).order_by(Source.created_at)).all()
-    response_ai, source_ai = call_modele_chat(content, db_messages, db_sources)    
+    message = Message(discussion_id=discussion.id, role="user", content=content)   
+
+    response_ai= call_modele_chat(content)    
     assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
-    discussion.updated_at = utc_now()
-    #si une source est renvoyer on l'enregistre dans la base de données
-    if(source_ai):
-        for s in source_ai:
-            source = Source(discussion_id=discussion.id, content=s, )
-            session.add(source)
+    discussion.updated_at = utc_now()    
     session.add(message)
     session.add(assistant)
     session.add(discussion)
     session.commit()
     session.refresh(message)
     session.refresh(assistant)
+    session.refresh(discussion)
     return [message, assistant]
 
 @router.patch("/discussions/{discussion_id}/messages/{message_id}", response_model=MessageResponse)

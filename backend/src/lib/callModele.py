@@ -1,9 +1,8 @@
 import os
 
-from lib.prompt_systeme import PROMPT_SYSTEME_BASE, PROMPT_SYSTEME_WITH_NEWS
-
+from lib.prompt_systeme import PROMPT_SYSTEME_BASE
 from pydantic_ai import Agent
-from pydantic_ai.models.test import TestModel
+from pydantic_ai.models.test import TestModel, TypeAdapter
 import requests
 from pydantic import BaseModel, ConfigDict, Field
 import json
@@ -11,7 +10,8 @@ from dotenv import load_dotenv  # uv add python-dotenv
 from typing import Literal
 from datetime import date as dt
 from urllib.parse import urlencode
-from models import Message, Source
+from models import Message, Source, DiscussionSource
+from sqlmodel import Session, select
 
 #Rajout pour utiliser les endpoint de mammouth
 from pydantic_ai.models.openai import OpenAIChatModel
@@ -61,6 +61,43 @@ class NeedSearchNews(BaseModel):
     kind: Literal["search-news"] = "search-news"
     parametres: ParamsSearchNews
 
+class Article(BaseModel):
+    id: int
+    title: str
+    text: str
+    url: str
+    publish_date: str
+    image: str | None = None
+    video: str | None = None
+    summary: str | None = None
+    author: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    category: str | None = None
+    language: str | None = None
+    source_country: str | None = None
+    sentiment: float | None = None
+
+class NewsCluster(BaseModel):
+    news: list[Article]
+
+class TopNewsResponse(BaseModel):
+    top_news: list[NewsCluster]
+    language: str
+    country: str
+
+class SearchNewsResponse(BaseModel):
+    offset: int
+    number: int
+    available: int
+    news: list[Article]
+
+NewsApiResponse = TopNewsResponse | SearchNewsResponse
+_adapter = TypeAdapter(NewsApiResponse)     
+
+def parse_response(raw: dict) -> NewsApiResponse:
+    # Pydantic essaie chaque type de l'union dans l'ordre (mode "smart" par défaut)
+    # et retourne le premier qui valide. Lève ValidationError si aucun ne match.
+    return _adapter.validate_python(raw)
 
 API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
 MAMMOUTH_KEY = os.getenv("MAMMOUTH_KEY")
@@ -108,7 +145,6 @@ chat_agent_2 = Agent(
     output_type=NeedTopNews | NeedSearchNews
 )
 
-
 def to_pydantic_history(db_messages:list[Message]) -> list[ModelMessage]:
     """Convertit les messages de la base en historique PydanticAI."""
     history: list[ModelMessage] = []
@@ -127,14 +163,43 @@ def _source_text(source: Source | dict | str) -> str:
         return json.dumps(source, ensure_ascii=False)
     return source
 
+#Sauvegarde des articles reçu dans la base de donné et asociation à la discussion
+def save_article(articles:list[Article], session:Session, discussion_id:int):
+    for article in articles:
+        #recherche si un url existe déja
+        current_source = session.exec(select(Source).where(Source.url == article.url)).first()
+        src_id:int = None
+        #si il existe on recupére l'id de la source
+        if(current_source):
+            src_id = current_source.id
+            #sinon on créer l'artcile avant de récupérer l'id de la nouvelle source
+        else:
+            source = Source(article.url, article.text)
+            session.add(source)
+            session.commit()
+            session.refresh(source)
+            src_id = source.id
+        #On créer une instance intermediaire qui relie la discution à la source
+        discussion_source = DiscussionSource(discussion_id, src_id.id)
+        session.add(discussion_source)
+        session.commit()
+        session.refresh(discussion_source)
 
 def call_modele_chat(
     prompt: str,
-    db_messages: list[Message] | None = None,
-    db_source: list[Source] | None = None,
+    session: Session,
+    discussion_id: int,  
 ) -> tuple[ResModel, list[str]]:
-    history = to_pydantic_history(db_messages or [])
 
+        #Récupération des messages de la conversation
+    db_messages = session.exec(
+        select(Message).where(Message.discussion_id == discussion_id).order_by(Message.created_at, Message.id)
+    ).all()
+    db_source = session.exec(select(Article)
+    .join(DiscussionSource, DiscussionSource.article_id == Article.id)
+    .where(DiscussionSource.discussion_id == discussion_id)).all()
+    
+    history = to_pydantic_history(db_messages or [])
     # On ajoute au prompt les sources déjà enregistrées pour cette discussion.
     sources_existantes = [_source_text(source) for source in (db_source or [])]
     followup = prompt
@@ -159,28 +224,38 @@ def call_modele_chat(
         match result:
             case NeedTopNews() | NeedSearchNews():
                 source = call_world_new(result)
-                conversation += "source reçu : \n" + json.dumps(source) + "\n\n"
-                new_sources.append(json.dumps(source, ensure_ascii=False))
+                #Liste de tous les articles récupérer
+                articles:list[Article] = []
+                #si la reponse provient de topNews
+                if(isinstance(TopNewsResponse)):                    
+                    for clusters in source.top_news:
+                        articles = clusters     
+                elif(isinstance(SearchNewsResponse)):
+                    articles = source.news
+                #sauvegarde dans la db
+                save_article(articles,session,discussion_id)
+
+                conversation += "source reçu : \n" + json.dumps(articles) + "\n\n"
+                new_sources.append(json.dumps(articles, ensure_ascii=False))
 
                 # On renvoie le résultat au modèle en lui demandant de conclure.
                 followup = (
                     f"Résultat de l'appel {result.kind} :\n"
-                    f"{json.dumps(source, ensure_ascii=False)}\n\n"
+                    f"{json.dumps(articles, ensure_ascii=False)}\n\n"
                     f"Tu as maintenant les données nécessaires pour répondre à : {prompt}\n"
                     "N'appelle plus l'API : réponds avec une sortie assistant ou reviews."
                 )
             case ResModel():
-                return result, new_sources
+                return result
             case _:
                 raise TypeError(f"Sortie inattendue : {type(result)}")
 
     with open("conversation.txt","w",encoding="utf-8") as f:
         f.write(conversation)
 
-    raise RuntimeError("Trop de demandes de news successives")
-       
+    raise RuntimeError("Trop de demandes de news successives")       
 
-def call_world_new(result:NeedTopNews | NeedSearchNews):        
+def call_world_new(result:NeedTopNews | NeedSearchNews)->NewsApiResponse:        
 
     params = result.parametres   
     
@@ -201,7 +276,7 @@ def call_world_new(result:NeedTopNews | NeedSearchNews):
 
     res.raise_for_status()       
     print("reponse api news world ok !", res)
-    return res.json()
+    return parse_response(res.json())
 
 if __name__ == '__main__':
     
