@@ -4,7 +4,6 @@ import { SyntheticEvent, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation";
 import { api, Discussion, Message, PressReview } from "@/lib/api";
 import { jsonBody, ApiError } from "@/lib/exportApi";
-import ReviewModal from "@/components/ReviewModal";
 import styles from "./ChatView.module.css";
 import Link from "next/link";
 import Image from "next/image";
@@ -20,22 +19,16 @@ type Props = { discussionId?: string };
 export default function ChatView({ discussionId }: Props) {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
-  const [discussion, setDiscussion] = useState<Discussion | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [review, setReview] = useState<PressReview | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const [openModal, setOpenModal] = useState<boolean>(false)
   const loadDiscussion = useCallback(async () => {
     if (!discussionId) return;
 
     try {
-      const [currentDiscussion, conversation] = await Promise.all([
-        api<Discussion>(`/discussions/${discussionId}`),
-        api<Message[]>(`/discussions/${discussionId}/messages`),
-      ]);
-      setDiscussion(currentDiscussion);
+      const conversation = await api<Message[]>(`/discussions/${discussionId}/messages`);
       setMessages(conversation);
       setError("");
     } catch (err) {
@@ -68,14 +61,13 @@ export default function ChatView({ discussionId }: Props) {
         activeId = String(created.id);
       }
       //Ecrit un nouveau message dans la discussion et renvoie la reponse
-      let result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: mes.trim() }));
+      const result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: mes.trim() }));
 
       if (result[1].role === "reviews") {
         //Code pour créer une reviews        
       }
 
       setMessages((previous) => [...previous, ...result]);
-      setDiscussion((previous) => previous ?? { id: Number(activeId), title: mes.trim().slice(0, 80), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
 
       if (!discussionId) router.replace(`/chat/${activeId}`);
     } catch (err) {

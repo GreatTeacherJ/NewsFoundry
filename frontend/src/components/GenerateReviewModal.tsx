@@ -25,7 +25,7 @@ export default function GenerateReviewModal({ onThemeChange, generateReview, set
         <form className={styles.form}>
           <label className={styles.field}>
             <span>Thème de la revue de presse</span>
-            <input type="text" />
+            <input type="text" onChange={(event) => onThemeChange(event.target.value)} />
           </label>
           <button className={styles.generateButton} onClick={generateReview} type="button">Générer</button>
         </form>
