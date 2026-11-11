@@ -65,6 +65,8 @@ class NeedSearchNews(BaseModel):
 API_KEY_WORLD = os.getenv("API_KEY_WORLD", "")
 MAMMOUTH_KEY = os.getenv("MAMMOUTH_KEY")
 
+MAX_NEWS_ROUNDS = 3
+
 review = """**REVUE DE PRESSE POLITIQUE - 30 Septembre 2025**
 
 **Synthèse hebdomadaire des principales actualités politiques :**
@@ -117,52 +119,66 @@ def to_pydantic_history(db_messages:list[Message]) -> list[ModelMessage]:
             history.append(ModelResponse(parts=[TextPart(content=msg.content)]))
     return history
 
+def _source_text(source: Source | dict | str) -> str:
+    """Retourne le texte d'une source, qu'elle vienne de la base ou de l'API."""
+    if isinstance(source, Source):
+        return source.content
+    if isinstance(source, dict):
+        return json.dumps(source, ensure_ascii=False)
+    return source
 
 
-def call_modele_chat(prompt:str, db_messages:list[Message], db_source:list[Source]) -> tuple[ResModel, str]:
+def call_modele_chat(
+    prompt: str,
+    db_messages: list[Message] | None = None,
+    db_source: list[Source] | None = None,
+) -> tuple[ResModel, list[str]]:
+    history = to_pydantic_history(db_messages or [])
 
-    #on commence par envoyer la demande de l'utilisateur au model
-    print("prompt reçu : ", prompt)
+    # On ajoute au prompt les sources déjà enregistrées pour cette discussion.
+    sources_existantes = [_source_text(source) for source in (db_source or [])]
+    followup = prompt
+    if sources_existantes:
+        followup += "\n\nDonnées déjà récupérées :\n" + "\n".join(sources_existantes)
 
-    #Ajout de la discusion et des sources existante
-    db_source_completed = db_source   
+    new_sources: list[str] = []
 
-    followup = (
-        f"Question de l'utilisateur : {prompt}\n\n"
-        f"Données de la conversations dans l'ordre reçu:\n"
-        f"{json.dumps(db_source_completed)}\n\n"
-        f"Réponds en utilisant uniquement ces données."
-    )
-    #Recéption de la nouvelle reponse
-    result = chat_agent.run_sync(user_prompt=followup, message_history=to_pydantic_history(db_messages)).output     
-    
-    print("Premiére reponse model reçu : ", result)
+    conversation:str = f"{db_messages!r}\n"
+    for _ in range(MAX_NEWS_ROUNDS):
 
-    match result : 
-        # Si le model à besoin d'info en plus il renvoie un type NeedWorld
-        case NeedTopNews() | NeedSearchNews():
-            print("Demande d'info à worldNews")
-            #Récupération des nouvelles
-            res_world_new = call_world_new(result)
-            
-             #On ajoute le nouveau resultat à la liste
-            db_source_completed.append(res_world_new)
-            #Elaborations du nouveau prompt systeme avec les new
-            followup = (
-                f"Question de l'utilisateur : {prompt}\n\n"
-                f"Données de la conversations dans l'ordre reçu:\n"
-                f"{json.dumps(db_source_completed)}\n\n"
-                f"Réponds en utilisant uniquement ces données."
-            )
-            #Recéption de la nouvelle reponse
-            result = chat_agent.run_sync(user_prompt=followup, message_history=to_pydantic_history(db_messages)).output
-            
-            return result, json.dumps(res_world_new, ensure_ascii=False)
-        case ResModel():
-            return result, None
-        case _:
-            raise TypeError(f"Sortie inattendue : {type(result)}")
-   
+        conversation += followup  + "\n\n"
+
+        run = chat_agent.run_sync(user_prompt=followup, message_history=history)
+        result = run.output
+
+        # On conserve l'échange complet : le modèle voit sa demande et le résultat.
+        history = run.all_messages()
+
+        conversation += f"reponse agent :\n {result!r}\n\n"
+
+        match result:
+            case NeedTopNews() | NeedSearchNews():
+                source = call_world_new(result)
+                conversation += "source reçu : \n" + json.dumps(source) + "\n\n"
+                new_sources.append(json.dumps(source, ensure_ascii=False))
+
+                # On renvoie le résultat au modèle en lui demandant de conclure.
+                followup = (
+                    f"Résultat de l'appel {result.kind} :\n"
+                    f"{json.dumps(source, ensure_ascii=False)}\n\n"
+                    f"Tu as maintenant les données nécessaires pour répondre à : {prompt}\n"
+                    "N'appelle plus l'API : réponds avec une sortie assistant ou reviews."
+                )
+            case ResModel():
+                return result, new_sources
+            case _:
+                raise TypeError(f"Sortie inattendue : {type(result)}")
+
+    with open("conversation.txt","w",encoding="utf-8") as f:
+        f.write(conversation)
+
+    raise RuntimeError("Trop de demandes de news successives")
+       
 
 def call_world_new(result:NeedTopNews | NeedSearchNews):        
 
@@ -184,7 +200,7 @@ def call_world_new(result:NeedTopNews | NeedSearchNews):
     res = requests.get(url, headers={"x-api-key": API_KEY_WORLD}, timeout=50)
 
     res.raise_for_status()       
-    print("reponse api news world ok !")
+    print("reponse api news world ok !", res)
     return res.json()
 
 if __name__ == '__main__':

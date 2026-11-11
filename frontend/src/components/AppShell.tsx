@@ -70,7 +70,7 @@ export default function AppShell({ children }: Props) {
                 href={`/chat/${discussion.id}`}
                 key={discussion.id}
               >
-                <span>{discussion.title}</span>
+                <span>Discussion du</span>
                 <time dateTime={discussion.updated_at}>
                   {new Date(discussion.updated_at).toLocaleDateString("fr-FR")}
                 </time>

@@ -56,25 +56,27 @@ export default function ChatView({ discussionId }: Props) {
     if (!draft.trim() || busy) return;
     setError("");
     setBusy(true);
+    const mes = draft
+    setDraft("")
     try {
 
       let activeId = discussionId;
       if (!activeId) {
         //s'il n'y à pas de discution en créer une
-        const created = await api<Discussion>("/discussions", jsonBody({ title: draft.trim().slice(0, 80) }));
+        const created = await api<Discussion>("/discussions", jsonBody({ title: mes.trim().slice(0, 80) }));
         //Récuperer l'id de la nouvelle session
         activeId = String(created.id);
       }
       //Ecrit un nouveau message dans la discussion et renvoie la reponse
-      let result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: draft.trim() }));
+      let result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: mes.trim() }));
 
       if (result[1].role === "reviews") {
         //Code pour créer une reviews        
       }
 
       setMessages((previous) => [...previous, ...result]);
-      setDiscussion((previous) => previous ?? { id: Number(activeId), title: draft.trim().slice(0, 80), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-      setDraft("");
+      setDiscussion((previous) => previous ?? { id: Number(activeId), title: mes.trim().slice(0, 80), created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+
       if (!discussionId) router.replace(`/chat/${activeId}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Impossible d’envoyer le message.");
@@ -97,10 +99,10 @@ export default function ChatView({ discussionId }: Props) {
     setOpenModal(false)
     try {
 
-      const result = await api<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
-      setReview(result);
-
+      await api<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
       setOpenModal(false)
+      router.push("/reviews")
+
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Impossible de générer la revue de presse.");
     } finally {
@@ -191,10 +193,14 @@ export default function ChatView({ discussionId }: Props) {
           </div>
         ))}
         <div ref={endRef} />
+        <div className={styles.infoWrapper}>
+          {error && <p className={styles.error} role="alert">{error}</p>}
+          {busy && <span className={styles.dots}></span>}
+        </div>
       </section>
-      {error && <p className={styles.error} role="alert">{error}</p>}
 
       <form className={styles.wrapperComposer} onSubmit={sendMessage}>
+
         <label className={styles.srOnly} htmlFor="message">Votre message</label>
         <textarea className={styles.composer} id="message" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Tapez votre message ici…" rows={1} />
         <button className={styles.composerButton} type="submit" aria-label="Envoyer le message" disabled={busy || !draft.trim()}>

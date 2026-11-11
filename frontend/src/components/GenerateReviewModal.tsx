@@ -13,7 +13,7 @@ export default function GenerateReviewModal({ onThemeChange, generateReview, set
 
 
   return (
-    <div className={styles.backdrop} onClick={() => setOpenModal(false)}>
+    <div className={styles.backdrop}>
       <section className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="generate-review-title">
         <button onClick={() => setOpenModal(false)} className={styles.closeRow}>
           <span>Fermer</span>
@@ -25,7 +25,7 @@ export default function GenerateReviewModal({ onThemeChange, generateReview, set
         <form className={styles.form}>
           <label className={styles.field}>
             <span>Thème de la revue de presse</span>
-            <input type="text" onChange={(event) => onThemeChange(event.target.value)} />
+            <input type="text" />
           </label>
           <button className={styles.generateButton} onClick={generateReview} type="button">Générer</button>
         </form>

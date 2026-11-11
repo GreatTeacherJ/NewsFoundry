@@ -269,14 +269,15 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     db_messages = session.exec(
         select(Message).where(Message.discussion_id == discussion_id).order_by(Message.created_at, Message.id)
     ).all()
-    db_sources = session.exec(select(Source.discussion_id == discussion_id).order_by(Source.created_at)).all()
+    db_sources = session.exec(select(Source).where(Source.discussion_id == discussion_id).order_by(Source.created_at)).all()
     response_ai, source_ai = call_modele_chat(content, db_messages, db_sources)    
     assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
     discussion.updated_at = utc_now()
     #si une source est renvoyer on l'enregistre dans la base de données
     if(source_ai):
-        source = Source(discussion_id=discussion.id, content=source_ai, )
-        session.add(source)
+        for s in source_ai:
+            source = Source(discussion_id=discussion.id, content=s, )
+            session.add(source)
     session.add(message)
     session.add(assistant)
     session.add(discussion)
