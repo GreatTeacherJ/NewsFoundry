@@ -13,8 +13,7 @@ from sqlmodel import Session, select
 
 from database import engine
 from lib.callModele import call_modele_chat
-from models import Discussion, Message, PressReview, User, Source, utc_now
-
+from models import Discussion, Message, PressReview, User, utc_now
 
 router = APIRouter(tags=["base"]) 
 
@@ -263,12 +262,15 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     content = payload.content.strip()
     if not content:
         raise HTTPException(status_code=422, detail="Le message ne peut pas être vide.")
-    message = Message(discussion_id=discussion.id, role="user", content=content)   
-
-    response_ai= call_modele_chat(content)    
-    assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
-    discussion.updated_at = utc_now()    
+    message = Message(discussion_id=discussion.id, role="user", content=content)
     session.add(message)
+    # Flush (sans commit) : le message courant n'est pas perdu si l'appel IA échoue
+    # tout en restant visible pour la lecture de l'historique dans call_modele_chat.
+    session.flush()
+
+    response_ai, _sources = call_modele_chat(content, session, discussion.id)
+    assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
+    discussion.updated_at = utc_now()
     session.add(assistant)
     session.add(discussion)
     session.commit()

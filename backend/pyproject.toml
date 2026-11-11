@@ -13,6 +13,7 @@ dependencies = [
     "PyJWT>=2.10.0",
     "email-validator>=2.3.0",
     "pydantic-ai>=2.27.1",
+    "requests>=2.34.2",
 ]
 
 [dependency-groups]

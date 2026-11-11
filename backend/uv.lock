@@ -104,6 +104,7 @@ dependencies = [
     { name = "psycopg2-binary" },
     { name = "pydantic-ai" },
     { name = "pyjwt" },
+    { name = "requests" },
     { name = "sqlmodel" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -123,6 +124,7 @@ requires-dist = [
     { name = "psycopg2-binary", specifier = ">=2.9.9" },
     { name = "pydantic-ai", specifier = ">=2.27.1" },
     { name = "pyjwt", specifier = ">=2.10.0" },
+    { name = "requests", specifier = ">=2.34.2" },
     { name = "sqlmodel", specifier = ">=0.0.14" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]

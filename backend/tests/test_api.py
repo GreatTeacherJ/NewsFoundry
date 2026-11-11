@@ -62,14 +62,14 @@ def test_discussion_messages_and_press_review_lifecycle():
         json={"content": "Résume les actualités"},
     )
     assert response.status_code == 201
-    assert [message["role"] for message in response.json()] == ["user", "assistant"]
-    assert "aucune IA" in response.json()[1]["content"]
+    assert [message["role"] for message in response.json()] == ["user", "reviews"]
+    assert "REVUE DE PRESSE" in response.json()[1]["content"]
     assert len(client.get(f"/discussions/{discussion_id}/messages", headers=headers).json()) == 2
 
     response = client.post(f"/discussions/{discussion_id}/press-reviews", headers=headers)
     assert response.status_code == 201
     review_id = response.json()["id"]
-    assert "en attente" in response.json()["content"]
+    assert "REVUE DE PRESSE" in response.json()["content"]
     assert client.get("/press-reviews", headers=headers).json()[0]["id"] == review_id
     assert client.delete(f"/press-reviews/{review_id}", headers=headers).status_code == 204
 

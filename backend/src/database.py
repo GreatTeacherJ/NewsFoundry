@@ -2,7 +2,7 @@ import os
 
 from sqlmodel import SQLModel, create_engine
 
-from models import Discussion, Message, PressReview, User, Source
+from models import Discussion, Message, PressReview, Source, User
 
 MODEL_TABLES = (User, Discussion, Message, PressReview, Source)
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./newsfoundry.db")

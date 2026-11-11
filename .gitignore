@@ -11,3 +11,4 @@ wheels/
 
 .env
 backend/src/pydanti_agent.py
+backend/conversation.txt
