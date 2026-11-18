@@ -335,3 +335,63 @@ def test_call_modele_chat_limite_les_demandes_de_news(session, discussion):
         )
 
     assert len(fetched) == MAX_NEWS_ROUNDS
+
+
+# --------------------------------------------------------------------------- #
+# Date du jour
+# --------------------------------------------------------------------------- #
+def test_instruction_date_du_jour_formate_la_date_en_francais():
+    from datetime import UTC, datetime
+
+    from lib.prompt_systeme import instruction_date_du_jour
+
+    texte = instruction_date_du_jour(datetime(2026, 11, 16, 10, 0, tzinfo=UTC))
+
+    assert "lundi 16 novembre 2026" in texte
+    assert "2026-11-16" in texte
+
+
+def test_instruction_date_du_jour_utilise_le_fuseau_de_paris():
+    from datetime import UTC, datetime
+
+    from lib.prompt_systeme import instruction_date_du_jour
+
+    # 23h30 UTC le 31/12 = 00h30 le 1er janvier à Paris.
+    texte = instruction_date_du_jour(datetime(2026, 12, 31, 23, 30, tzinfo=UTC))
+
+    assert "vendredi 1 janvier 2027" in texte
+
+
+def test_le_prompt_n_a_plus_de_placeholder_de_date():
+    from lib.prompt_systeme import PROMPT_SYSTEME_BASE
+
+    assert "[DATE_DU_JOUR]" not in PROMPT_SYSTEME_BASE
+
+
+def test_l_agent_recoit_la_date_du_jour_meme_avec_un_historique():
+    from datetime import date
+
+    from pydantic_ai.models.function import FunctionModel
+
+    from lib.prompt_systeme import PROMPT_SYSTEME_BASE
+
+    seen = []
+
+    def model_function(messages, info):
+        from pydantic_ai.messages import ModelResponse, ToolCallPart
+
+        seen.append(messages[-1].instructions)
+        tool = info.output_tools[0]
+        return ModelResponse(
+            parts=[ToolCallPart(tool.name, {"kind": "assistant", "content": "ok"})]
+        )
+
+    history = to_pydantic_history([Message(discussion_id=1, role="user", content="Salut")])
+    with callModele.chat_agent.override(model=FunctionModel(model_function)):
+        callModele.chat_agent.run_sync("Quoi de neuf ?", message_history=history)
+
+    assert seen, "le modèle n'a pas été appelé"
+    assert "Date du jour" in seen[0]
+    assert date.today().strftime("%Y") in seen[0]
+    # Le prompt système doit aussi être présent quand un historique est fourni.
+    assert PROMPT_SYSTEME_BASE[:60] in seen[0]

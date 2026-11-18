@@ -97,3 +97,31 @@ def test_resources_are_isolated_by_owner():
 def test_authentication_required_and_bad_token_rejected():
     assert client.get("/discussions").status_code == 401
     assert client.get("/discussions", headers={"Authorization": "Bearer invalid"}).status_code == 401
+
+
+def test_press_review_without_reviews_message_returns_409():
+    headers = {"Authorization": f"Bearer {register_and_login('norev@example.com')}"}
+    discussion_id = client.post("/discussions", headers=headers, json={"title": "Vide"}).json()["id"]
+
+    response = client.post(f"/discussions/{discussion_id}/press-reviews", headers=headers)
+
+    assert response.status_code == 409
+    assert "Aucune revue" in response.json()["detail"]
+    assert client.get("/press-reviews", headers=headers).json() == []
+
+
+def test_ai_failure_returns_502_and_keeps_no_orphan_message(monkeypatch):
+    headers = {"Authorization": f"Bearer {register_and_login('aifail@example.com')}"}
+    discussion_id = client.post("/discussions", headers=headers, json={"title": "Panne"}).json()["id"]
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("Trop de demandes de news successives")
+
+    monkeypatch.setattr(base, "call_modele_chat", boom)
+    response = client.post(
+        f"/discussions/{discussion_id}/messages", headers=headers, json={"content": "Bonjour"}
+    )
+
+    assert response.status_code == 502
+    assert "n’a pas pu répondre" in response.json()["detail"]
+    assert client.get(f"/discussions/{discussion_id}/messages", headers=headers).json() == []

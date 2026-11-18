@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -15,7 +16,9 @@ from database import engine
 from lib.callModele import call_modele_chat
 from models import Discussion, Message, PressReview, User, utc_now
 
-router = APIRouter(tags=["base"]) 
+logger = logging.getLogger(__name__)
+
+router = APIRouter(tags=["base"])
 
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ACCESS_TOKEN_MINUTES = int(os.getenv("JWT_ACCESS_TOKEN_MINUTES", "480"))
@@ -267,8 +270,24 @@ def create_message(discussion_id: int, payload: MessageCreate, user: CurrentUser
     # Flush (sans commit) : le message courant n'est pas perdu si l'appel IA échoue
     # tout en restant visible pour la lecture de l'historique dans call_modele_chat.
     session.flush()
+    message_id = message.id
 
-    response_ai, _sources = call_modele_chat(content, session, discussion.id)
+    try:
+        response_ai, _sources = call_modele_chat(content, session, discussion.id)
+    except Exception:
+        # Modèle indisponible, World News API en erreur, trop de tours de news...
+        logger.exception("Échec de l'appel IA pour la discussion %s", discussion.id)
+        session.rollback()
+        # save_article() peut avoir validé le message utilisateur avant l'échec :
+        # on le retire pour qu'il n'y ait pas de question sans réponse en base.
+        orphan = session.get(Message, message_id)
+        if orphan is not None:
+            session.delete(orphan)
+            session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="L’assistant n’a pas pu répondre pour le moment. Réessayez dans un instant.",
+        ) from None
     assistant = Message(discussion_id=discussion.id, role=response_ai.kind, content=response_ai.content)
     discussion.updated_at = utc_now()
     session.add(assistant)
@@ -330,6 +349,11 @@ def create_press_review(discussion_id: int, user: CurrentUser, session: SessionD
     discussion = get_owned_discussion(session, discussion_id, user.id)
     #On récupére le dernier message qui porte le role de reviews dans les message de la discussion
     reviews_discussion = session.exec(select(Message).where(Message.discussion_id == discussion_id).where(Message.role == "reviews").order_by(Message.created_at.desc())).first()
+    if reviews_discussion is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aucune revue de presse dans cette discussion. Demandez à l’assistant d’en rédiger une.",
+        )
     review = PressReview(
         owner_id=user.id,
         discussion_id=discussion.id,

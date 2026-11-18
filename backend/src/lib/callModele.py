@@ -21,7 +21,7 @@ from pydantic_ai.models.test import TestModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from sqlmodel import Session, select
 
-from lib.prompt_systeme import PROMPT_SYSTEME_BASE
+from lib.prompt_systeme import PROMPT_SYSTEME_BASE, instruction_date_du_jour
 from models import DiscussionSource, Message, Source
 
 logger = logging.getLogger(__name__)
@@ -146,9 +146,19 @@ def build_model(custom_output_args: dict) -> TestModel | OpenAIChatModel:
 
 chat_agent = Agent(
     build_model({"kind": "reviews", "content": review}),
-    system_prompt=PROMPT_SYSTEME_BASE,
+    # `instructions` (et non `system_prompt`) : PydanticAI ne rejoue pas le system_prompt
+    # quand un `message_history` est fourni, le modèle perdrait alors son rôle dès le
+    # 2e message d'une discussion. Les instructions, elles, sont envoyées à chaque appel.
+    instructions=PROMPT_SYSTEME_BASE,
     output_type=ResModel | NeedTopNews | NeedSearchNews,
 )
+
+@chat_agent.instructions
+def _date_du_jour() -> str:
+    # Évaluée à chaque exécution (contrairement à system_prompt, figé à la création
+    # et non rejoué quand un historique est fourni) : la date est donc toujours à jour.
+    return instruction_date_du_jour()
+
 
 chat_agent_2 = Agent(
     build_model(
