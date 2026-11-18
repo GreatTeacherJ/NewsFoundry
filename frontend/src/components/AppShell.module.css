@@ -39,7 +39,6 @@
   flex: 1;
   flex-direction: column;
   gap: 24px;
-  padding: 24px;
 }
 
 .newChat {
@@ -58,31 +57,9 @@
   gap: 4px;
 }
 
-.navLink,
-.navLinkActive {
-  display: flex;
-  padding: 11px 12px;
-  border-radius: 8px;
-  color: #2a2a31;
-  font-size: 14px;
-  gap: 5px;
-  text-decoration: none;
-}
-
-.navLinkActive {
-  background: #803cda;
-  color: white;
-  font-weight: 700;
-}
-
-.navLink{
-  background-color: #F5F5F7;
-}
-
 .discussionList {
   display: grid;
   min-height: 0;
-  gap: 8px;
   overflow-y: auto;
 }
 
@@ -98,15 +75,20 @@
 .conversationActive {
   display: grid;
   gap: 4px;
-  padding: 11px 12px;
-  border-radius: 8px;
+  padding: 15px;
   color: #2a2a31;
   font-size: 14px;
+  width: 100%;
+  border-bottom: 1px solid #e5e5ef;
+  text-decoration: none;
 }
 
-.conversation:hover,
+.conversation:hover {
+  text-decoration: underline;
+}
+
 .conversationActive {
-  background: #eceef2;
+  background: #f1f2f5;
 }
 
 .conversation time,
@@ -132,22 +114,6 @@
   flex-direction: column;
 }
 
-.header {
-  display: flex;
-  height: 88px;
-  flex: 0 0 88px;
-  align-items: center;
-  justify-content: start;
-  padding: 16px 28px;
-  border-bottom: 1px solid #e5e5ef;
-  background: #fbfbfc;
-  gap: 10px;
-}
-
-.header p {
-  font-size: 18px;
-  font-weight: 500;
-}
 
 .avatar {
   display: grid;
@@ -215,7 +181,8 @@
   }
 
   .logout {
-    display: none;
+    display: flex;
+    gap: 5px;
   }
 
   .header {

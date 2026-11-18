@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
-import { api, ApiError, jsonBody } from "@/lib/api";
+import { SyntheticEvent, useState } from "react";
+import { jsonBody, ApiError } from "@/lib/exportApi";
+import { api } from "@/lib/api";
 import styles from "./LoginForm.module.css";
 import Image from "next/image";
+import { loginAction } from "@/lib/loginActions";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -14,16 +16,15 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SyntheticEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
       if (isRegistering) {
-        await api("/auth/register", undefined, jsonBody({ email, password }));
+        await api("/auth/register", jsonBody({ email, password }));
       }
-      const result = await api<{ access_token: string }>("/auth/login", undefined, jsonBody({ email, password }));
-      localStorage.setItem("newsfoundry_token", result.access_token);
+      await loginAction(email, password)
       router.push("/home");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "La connexion a échoué.");
@@ -35,11 +36,11 @@ export default function LoginForm() {
   return (
     <section className={styles.card} aria-labelledby="login-title">
       <div className={styles.logo} aria-label="NewsFoundry">
-        <Image 
-        src="logo.svg"
-        width={202}
-        height={20}
-        alt=""
+        <Image
+          src="logo.svg"
+          width={202}
+          height={20}
+          alt=""
         />
 
       </div>

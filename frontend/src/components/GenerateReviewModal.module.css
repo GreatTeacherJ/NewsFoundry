@@ -1,0 +1,124 @@
+.backdrop {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  padding: 24px;
+  background: rgb(10 10 10 / 50%);
+  inset: 0;
+  place-items: center;
+}
+
+.dialog {
+  display: flex;
+  width: min(556px, 100%);
+  min-height: 350px;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  padding: 32px 34px 48px;
+  border: 1px solid #eceef2;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.closeRow {
+  display: flex;
+  width: 100%;
+  min-height: 22px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 17px;
+  color: #717182;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  border: none;
+  background: none;
+  text-decoration: none;
+}
+
+.closeRow:hover {
+  text-decoration: underline;
+}
+
+.heading {
+  display: flex;
+  width: 259px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+  text-align: center;
+}
+
+.heading h2 {
+  color: #2a2a31;
+  font-family: "IBM Plex Sans", Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.0174em;
+  line-height: 24px;
+}
+
+.heading p {
+  color: #717182;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.form {
+  display: flex;
+  width: min(398px, 100%);
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  color: #2a2a31;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 19px;
+}
+
+.field input {
+  width: 100%;
+  height: 36px;
+  padding: 4px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  outline-color: #717182;
+  background: #eceef2;
+  color: #2a2a31;
+  font-size: 14px;
+}
+
+.generateButton {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: 4px;
+  background: #2a2a31;
+  color: #fff;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    gap: 32px;
+    padding: 28px 20px 36px;
+  }
+
+  .heading {
+    width: 100%;
+  }
+}

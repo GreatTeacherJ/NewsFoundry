@@ -12,6 +12,10 @@ dependencies = [
     "bcrypt>=4.3.0",
     "PyJWT>=2.10.0",
     "email-validator>=2.3.0",
+    "pydantic-ai>=2.27.1",
+    "requests>=2.34.2",
+    "mlflow>=3.18.0",
+    "openai>=3.55.0",
 ]
 
 [dependency-groups]

@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { PressReview } from "@/lib/api";
 import styles from "./ReviewModal.module.css";
+//Mise en forme Markdown
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Props = { review: PressReview; onClose: () => void };
 
@@ -25,7 +28,10 @@ export default function ReviewModal({ review, onClose }: Props) {
           </div>
           <button className={styles.close} onClick={onClose} aria-label="Fermer la revue de presse">×</button>
         </header>
-        <div className={styles.content}>{review.content}</div>
+        <div className={styles.content}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {review.content}
+          </ReactMarkdown></div>
         <footer className={styles.footer}>
           <button onClick={() => navigator.clipboard.writeText(review.content)}>Copier</button>
           <button className={styles.done} onClick={onClose}>Fermer</button>

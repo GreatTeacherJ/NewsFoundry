@@ -1,0 +1,37 @@
+.navLink,
+.navLinkActive {
+  display: flex;
+  padding: 11px 12px;
+  border-radius: 8px;
+  color: #2a2a31;
+  font-size: 14px;
+  gap: 5px;
+  text-decoration: none;
+}
+
+.navLinkActive {
+  background: #803cda;
+  color: white;
+  font-weight: 700;
+}
+
+.navLink {
+  background-color: #F5F5F7;
+}
+
+.header {
+  display: flex;
+  height: 88px;
+  flex: 0 0 88px;
+  align-items: center;
+  justify-content: start;
+  padding: 16px 28px;
+  border-bottom: 1px solid #e5e5ef;
+  background: #fbfbfc;
+  gap: 10px;
+}
+
+.header p {
+  font-size: 18px;
+  font-weight: 500;
+}

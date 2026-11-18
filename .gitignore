@@ -10,3 +10,7 @@ wheels/
 .venv
 
 .env
+backend/src/pydanti_agent.py
+backend/conversation.txt
+backend/.env.example
+backend/mlruns

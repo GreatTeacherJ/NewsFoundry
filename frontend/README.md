@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NewsFoundry : Frontend
 
-## Getting Started
+Interface web de NewsFoundry : Next.js 16 (App Router), React 19, TypeScript strict, CSS Modules.
 
-First, run the development server:
+## Lancement
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local   # défaut si absent : http://localhost:8000
+npm run dev                                                      # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Le backend doit tourner (voir [`../backend/README.md`](../backend/README.md)).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Commandes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Commande | Rôle |
+| --- | --- |
+| `npm run dev` | Serveur de développement |
+| `npm run lint` | ESLint |
+| `npx tsc --noEmit` | Vérification TypeScript |
+| `npm run build` | Build de production (le script contient `--webpack`, à conserver) |
+| `npm start` | Sert le build de production |
 
-## Learn More
+Ordre de vérification utilisé en CI : `npm ci` → `npm run lint` → `npx tsc --noEmit` → `npm run build` (avec `NEXT_PUBLIC_API_URL=http://localhost:8000`). Il n'y a pas de tests automatisés côté frontend.
 
-To learn more about Next.js, take a look at the following resources:
+Prérequis : Node 22.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Pages
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Route | Fichier | Contenu |
+| --- | --- | --- |
+| `/` | `src/app/page.tsx` | Connexion / création de compte (`LoginForm`) |
+| `/home` | `src/app/home/page.tsx` | Nouvelle discussion (écran d'accueil du chat) |
+| `/chat/[id]` | `src/app/chat/[id]/page.tsx` | Discussion existante |
+| `/reviews` | `src/app/reviews/page.tsx` | Bibliothèque des revues de presse |
 
-## Deploy on Vercel
+## Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+src/
+├── app/                 # Pages (App Router) et styles globaux
+├── components/          # Composants + CSS Modules associés
+│   ├── AppShell         # Mise en page : barre latérale (liste des discussions), déconnexion
+│   ├── Header           # Navigation Chat / Revues
+│   ├── LoginForm        # Connexion et inscription
+│   ├── ChatView         # Messages, saisie, envoi, création de discussion
+│   ├── GenerateReviewModal  # Fenêtre « Générer une revue de presse »
+│   ├── ReviewsView / ReviewModal  # Liste et lecture des revues
+├── lib/
+│   ├── api.ts           # Client API (Server Action) + types Discussion/Message/PressReview
+│   ├── exportApi.ts     # ApiError et jsonBody() (hors "use server")
+│   └── loginActions.ts  # loginAction / logoutAction (cookie)
+├── proxy.ts             # Protection des routes (redirections selon le cookie)
+└── types/typeApi.ts     # Types supplémentaires
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`@/*` correspond à `src/*`.
+
+## Authentification et appels API
+
+- **Cookie** : `loginAction` appelle `/auth/login` côté serveur et stocke le JWT dans le cookie `token` (`httpOnly`, `sameSite=lax`, `secure` en production, durée 8 h). Le JavaScript du navigateur ne peut pas le lire.
+- **`api<T>(path, options)`** (`lib/api.ts`) est marqué `"use server"` : il s'exécute sur le serveur Next, lit le cookie, ajoute `Authorization: Bearer <token>` (sauf pour `/auth/register` et `/auth/login`) et appelle l'API avec `cache: "no-store"`. Les composants client l'appellent comme une fonction normale. Il n'y a donc pas de CORS à gérer côté navigateur.
+- **Erreurs** : une réponse non `2xx` devient une `ApiError(message, status)` portant le champ `detail` renvoyé par le backend ; un serveur injoignable donne un message dédié. Les composants affichent ce message.
+- **`proxy.ts`** (middleware Next 16) : sans cookie, toute page autre que `/` redirige vers `/` ; avec cookie, `/` redirige vers `/home`. Il ne vérifie que la **présence** du cookie, pas la validité du jeton : un jeton expiré fait échouer les appels API, qui renvoient `401`.
+- **Déconnexion** : `logoutAction` supprime le cookie.
+
+## Fonctionnement du chat
+
+1. Sur `/home`, au premier message, `ChatView` crée une discussion (`POST /discussions`, titre = début du message, 80 caractères) puis envoie le message et redirige vers `/chat/{id}`.
+2. `POST /discussions/{id}/messages` renvoie `[message_utilisateur, réponse_ia]` ; les deux sont ajoutés à la liste affichée. Pendant l'attente (la réponse IA peut prendre plusieurs secondes) un indicateur de chargement s'affiche et l'envoi est bloqué.
+3. En ouvrant `/chat/{id}`, l'historique est rechargé via `GET /discussions/{id}/messages` : une conversation reprend donc là où elle s'est arrêtée, y compris après rechargement de la page.
+4. Les messages sont rendus en **Markdown** (`react-markdown` + `remark-gfm`). Les trois rôles (`user`, `assistant`, `reviews`) ont des styles distincts.
+5. Le bouton « Générer une revue de presse » (visible dans une discussion existante) vérifie qu'un message `reviews` existe, appelle `POST /discussions/{id}/press-reviews`, puis redirige vers `/reviews`. Sinon il invite à demander une revue à l'assistant.
+6. La barre latérale (`AppShell`) recharge la liste des discussions à chaque changement de page.
+
+Le champ « Thème » de la fenêtre de génération de revue n'est pas encore relié : le titre de la revue est construit par le backend (« Revue de presse — {titre de la discussion} »).
+
+## Déploiement
+
+Déployer ce dossier sur Vercel et définir `NEXT_PUBLIC_API_URL` sur l'URL HTTPS de l'API. Côté backend, ajouter l'origine du site dans `FRONTEND_ORIGINS`.
