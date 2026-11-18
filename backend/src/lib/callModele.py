@@ -2,9 +2,11 @@ import json
 import logging
 import os
 from datetime import date as dt
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlencode
 
+import mlflow
 import requests
 from dotenv import load_dotenv  # uv add python-dotenv
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -24,10 +26,39 @@ from sqlmodel import Session, select
 from lib.prompt_systeme import PROMPT_SYSTEME_BASE, instruction_date_du_jour
 from models import DiscussionSource, Message, Source
 
+# Charge le .env AVANT toute lecture de variable d'environnement (dont MLflow)
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
-# Charge le .env AVANT toute lecture de variable d'environnement
-load_dotenv()
+# Le tracing MLflow est optionnel : sans serveur joignable, on bascule sur un
+# stockage SQLite local pour que l'API démarre toujours (set_experiment bloque
+# sinon plusieurs minutes en essayant de joindre le serveur).
+MLFLOW_SQLITE_URI = f"sqlite:///{Path(__file__).resolve().parents[2] / 'mlflow.db'}"
+
+
+def _configure_mlflow() -> None:
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or MLFLOW_SQLITE_URI
+    if tracking_uri.startswith(("http://", "https://")):
+        try:
+            requests.get(f"{tracking_uri.rstrip('/')}/health", timeout=1).raise_for_status()
+        except requests.RequestException:
+            logger.warning(
+                "Serveur MLflow injoignable (%s) : tracing enregistré en local (%s).",
+                tracking_uri,
+                MLFLOW_SQLITE_URI,
+            )
+            tracking_uri = MLFLOW_SQLITE_URI
+    try:
+        mlflow.set_tracking_uri(tracking_uri)
+        mlflow.set_experiment(os.getenv("MLFLOW_EXPERIMENT", "weather-agent"))
+        mlflow.pydantic_ai.autolog()  # branche la collecte des traces
+    except Exception:
+        # Le tracing ne doit jamais empêcher le serveur de démarrer.
+        logger.warning("Initialisation MLflow impossible, tracing désactivé.", exc_info=True)
+
+
+_configure_mlflow()
 
 
 class ParamsTopNews(BaseModel):
@@ -40,7 +71,6 @@ class ParamsTopNews(BaseModel):
     max_news_per_cluster: int | None = Field(
         default=None, alias="max-news-per-cluster", ge=1, le=10
     )
-
 
 class ParamsSearchNews(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
