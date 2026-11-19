@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, PressReview } from "@/lib/api";
-import { ApiError } from "@/lib/exportApi";
+import { safeApi, PressReview } from "@/lib/api";
 import ReviewModal from "@/components/ReviewModal";
 import styles from "./ReviewsView.module.css";
 
@@ -17,10 +16,11 @@ export default function ReviewsView() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-
-    api<PressReview[]>("/press-reviews")
-      .then(setReviews)
-      .catch((err: Error) => setError(err instanceof ApiError ? err.message : "Impossible de charger les revues."))
+    void safeApi<PressReview[]>("/press-reviews")
+      .then((result) => {
+        if (result.ok) setReviews(result.data);
+        else setError(result.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
