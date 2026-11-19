@@ -2,30 +2,38 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { api } from "@/lib/api";
+import { safeApi } from "@/lib/api";
 import { jsonBody } from "@/lib/exportApi";
 
-export async function loginAction(email: string, password: string) {
+type LoginResult = { ok: true } | { ok: false; message: string };
 
-    console.log("loginAction !!!")
+export async function loginAction(
+  email: string,
+  password: string,
+): Promise<LoginResult> {
+  // Appel serveur -> serveur, pas de CORS ici
+  const result = await safeApi<{ access_token: string }>(
+    "/auth/login",
+    jsonBody({ email, password }),
+  );
 
-    // Appel serveur -> serveur, pas de CORS ici
-    const res = await api<{ access_token: string }>("/auth/login", jsonBody({ email, password }));
+  if (!result.ok) return { ok: false, message: result.message };
 
-    console.log("token: ", res.access_token)
-    // Next 15+ : cookies() est asynchrone, d'où le await
-    const cookieStore = await cookies();
-    cookieStore.set("token", res.access_token, {
-        httpOnly: true,                                // inaccessible au JS client
-        secure: process.env.NODE_ENV === "production", // HTTPS uniquement en prod
-        sameSite: "lax",
-        path: "/",
-        maxAge: 60 * 60 * 8,
-    });
+  // Next 15+ : cookies() est asynchrone, d'où le await
+  const cookieStore = await cookies();
+  cookieStore.set("token", result.data.access_token, {
+    httpOnly: true,                                // inaccessible au JS client
+    secure: process.env.NODE_ENV === "production", // HTTPS uniquement en prod
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 8,
+  });
+
+  return { ok: true };
 }
 
 export async function logoutAction() {
-    const cookieStore = await cookies();
-    cookieStore.delete("token");
-    redirect("/login");
+  const cookieStore = await cookies();
+  cookieStore.delete("token");
+  redirect("/login");
 }

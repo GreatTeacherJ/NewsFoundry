@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
-import { api, Discussion } from "@/lib/api";
+import { safeApi, Discussion } from "@/lib/api";
 import styles from "./AppShell.module.css";
 import Image from "next/image";
 import { logoutAction } from "@/lib/loginActions";
@@ -20,12 +20,12 @@ export default function AppShell({ children }: Props) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-
-    api<Discussion[]>("/discussions").then(setDiscussions)
-      .catch((err: Error) => setError(err.message))
+    void safeApi<Discussion[]>("/discussions")
+      .then((result) => {
+        if (result.ok) setDiscussions(result.data);
+        else setError(result.message);
+      })
       .finally(() => setLoading(false));
-
-
   }, [pathname, router]);
 
 

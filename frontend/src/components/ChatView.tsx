@@ -2,8 +2,8 @@
 
 import { SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, Discussion, Message, PressReview } from "@/lib/api";
-import { jsonBody, ApiError } from "@/lib/exportApi";
+import { safeApi, Discussion, Message, PressReview } from "@/lib/api";
+import { jsonBody } from "@/lib/exportApi";
 import styles from "./ChatView.module.css";
 import Link from "next/link";
 import Image from "next/image";
@@ -27,13 +27,13 @@ export default function ChatView({ discussionId }: Props) {
   const loadDiscussion = useCallback(async () => {
     if (!discussionId) return;
 
-    try {
-      const conversation = await api<Message[]>(`/discussions/${discussionId}/messages`);
-      setMessages(conversation);
-      setError("");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Impossible de charger cette discussion.");
+    const result = await safeApi<Message[]>(`/discussions/${discussionId}/messages`);
+    if (!result.ok) {
+      setError(result.message);
+      return;
     }
+    setMessages(result.data);
+    setError("");
   }, [discussionId]);
 
   useEffect(() => {
@@ -56,22 +56,26 @@ export default function ChatView({ discussionId }: Props) {
       let activeId = discussionId;
       if (!activeId) {
         //s'il n'y à pas de discution en créer une
-        const created = await api<Discussion>("/discussions", jsonBody({ title: mes.trim().slice(0, 80) }));
+        const created = await safeApi<Discussion>("/discussions", jsonBody({ title: mes.trim().slice(0, 80) }));
+        if (!created.ok) {
+          setError(created.message);
+          return;
+        }
         //Récuperer l'id de la nouvelle session
-        activeId = String(created.id);
+        activeId = String(created.data.id);
       }
       //Ecrit un nouveau message dans la discussion et renvoie la reponse
-      const result = await api<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: mes.trim() }));
-
-      if (result[1].role === "reviews") {
-        //Code pour créer une reviews        
+      const result = await safeApi<Message[]>(`/discussions/${activeId}/messages`, jsonBody({ content: mes.trim() }));
+      if (!result.ok) {
+        setError(result.message);
+        return;
       }
 
-      setMessages((previous) => [...previous, ...result]);
+      setMessages((previous) => [...previous, ...result.data]);
 
       if (!discussionId) router.replace(`/chat/${activeId}`);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Impossible d’envoyer le message.");
+    } catch {
+      setError("Impossible d’envoyer le message.");
     } finally {
       setBusy(false);
     }
@@ -91,12 +95,16 @@ export default function ChatView({ discussionId }: Props) {
     setOpenModal(false)
     try {
 
-      await api<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
+      const created = await safeApi<PressReview>(`/discussions/${discussionId}/press-reviews`, { method: "POST" });
+      if (!created.ok) {
+        setError(created.message);
+        return;
+      }
       setOpenModal(false)
       router.push("/reviews")
 
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Impossible de générer la revue de presse.");
+    } catch {
+      setError("Impossible de générer la revue de presse.");
     } finally {
       setBusy(false);
     }

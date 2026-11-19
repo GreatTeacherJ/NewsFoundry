@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { SyntheticEvent, useState } from "react";
-import { jsonBody, ApiError } from "@/lib/exportApi";
-import { api } from "@/lib/api";
+import { jsonBody } from "@/lib/exportApi";
+import { safeApi } from "@/lib/api";
 import styles from "./LoginForm.module.css";
 import Image from "next/image";
 import { loginAction } from "@/lib/loginActions";
@@ -22,12 +22,20 @@ export default function LoginForm() {
     setLoading(true);
     try {
       if (isRegistering) {
-        await api("/auth/register", jsonBody({ email, password }));
+        const registered = await safeApi("/auth/register", jsonBody({ email, password }));
+        if (!registered.ok) {
+          setError(registered.message);
+          return;
+        }
       }
-      await loginAction(email, password)
+      const logged = await loginAction(email, password);
+      if (!logged.ok) {
+        setError(logged.message);
+        return;
+      }
       router.push("/home");
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "La connexion a échoué.");
+    } catch {
+      setError("La connexion a échoué.");
     } finally {
       setLoading(false);
     }
