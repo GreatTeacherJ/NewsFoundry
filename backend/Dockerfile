@@ -9,4 +9,4 @@ COPY backend/src/ ./src/
 
 EXPOSE 8000
 
-CMD ["uv", "run", "python", "src/main.py"]
+CMD [".venv/bin/python", "src/main.py"]
