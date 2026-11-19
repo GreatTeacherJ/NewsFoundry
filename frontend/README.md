@@ -6,7 +6,7 @@ Interface web de NewsFoundry : Next.js 16 (App Router), React 19, TypeScript str
 
 ```bash
 npm ci
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local   # défaut si absent : http://localhost:8000
+echo "BACKEND_URL=http://localhost:8000" > .env.local 
 npm run dev                                                      # http://localhost:3000
 ```
 
@@ -22,7 +22,7 @@ Le backend doit tourner (voir [`../backend/README.md`](../backend/README.md)).
 | `npm run build` | Build de production (le script contient `--webpack`, à conserver) |
 | `npm start` | Sert le build de production |
 
-Ordre de vérification utilisé en CI : `npm ci` → `npm run lint` → `npx tsc --noEmit` → `npm run build` (avec `NEXT_PUBLIC_API_URL=http://localhost:8000`). Il n'y a pas de tests automatisés côté frontend.
+Ordre de vérification utilisé en CI : `npm ci` → `npm run lint` → `npx tsc --noEmit` → `npm run build` (avec `BACKEND_URL=http://localhost:8000`). Il n'y a pas de tests automatisés côté frontend.
 
 Prérequis : Node 22.
 
@@ -78,4 +78,4 @@ Le champ « Thème » de la fenêtre de génération de revue n'est pas encore r
 
 ## Déploiement
 
-Déployer ce dossier sur Vercel et définir `NEXT_PUBLIC_API_URL` sur l'URL HTTPS de l'API. Côté backend, ajouter l'origine du site dans `FRONTEND_ORIGINS`.
+Déployer ce dossier sur Vercel et définir `BACKEND_URL` sur l'URL HTTPS de l'API. Côté backend, ajouter l'origine du site dans `FRONTEND_ORIGINS`.

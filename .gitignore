@@ -12,5 +12,9 @@ wheels/
 .env
 backend/src/pydanti_agent.py
 backend/conversation.txt
-backend/.env.example
 backend/mlruns
+
+backend/*.db
+backend/mlruns/
+backend/.pytest_cache/
+backend/.ruff_cache/
