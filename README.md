@@ -62,7 +62,7 @@ L'API écoute sur `http://localhost:8000` (Swagger : `/docs`). Les tables sont c
 ```bash
 cd frontend
 npm ci
-echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
+echo "BACKEND_URL=http://localhost:8000" > .env.local
 npm run dev
 ```
 
@@ -88,7 +88,7 @@ L'application est sur `http://localhost:3000`. Utilisez « Créer un compte » s
 
 | Variable | Rôle | Défaut |
 | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | URL de l'API backend | `http://localhost:8000` |
+| `BACKEND_URL` | URL de l'API backend | `http://localhost:8000` |
 
 ## Tests et vérifications
 
@@ -126,7 +126,7 @@ Le détail (IA, base de données, reprise des conversations) est dans [`backend/
 
 ## Déploiement
 
-- **Frontend** : Vercel, avec `NEXT_PUBLIC_API_URL` pointant vers l'origine HTTPS de l'API.
+- **Frontend** : Vercel, avec `BACKEND_URL` pointant vers l'origine HTTPS de l'API.
 - **Backend** : Railway (ou tout hébergeur Docker). `backend/Dockerfile` doit être construit avec **la racine du dépôt** comme contexte (ses `COPY` commencent par `backend/`) :
 
   ```bash

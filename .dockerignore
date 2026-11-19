@@ -1,0 +1,20 @@
+# Contexte de build Docker : ne jamais envoyer ces dossiers
+.git
+.github
+.venv
+**/.venv
+**/__pycache__
+**/*.py[cod]
+**/.env
+**/.env.*
+!**/.env.example
+
+frontend/node_modules
+frontend/.next
+frontend/.vercel
+
+backend/mlruns
+backend/*.db
+backend/.pytest_cache
+backend/.ruff_cache
+docs

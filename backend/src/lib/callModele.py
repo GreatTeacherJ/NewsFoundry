@@ -38,6 +38,10 @@ MLFLOW_SQLITE_URI = f"sqlite:///{Path(__file__).resolve().parents[2] / 'mlflow.d
 
 
 def _configure_mlflow() -> None:
+    #Désactive mlFlow en production
+    if os.getenv("MLFLOW_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        logger.info("Tracing MLflow désactivé (MLFLOW_ENABLED=false).")
+        return
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI") or MLFLOW_SQLITE_URI
     if tracking_uri.startswith(("http://", "https://")):
         try:
