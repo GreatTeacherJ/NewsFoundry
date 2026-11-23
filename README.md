@@ -96,7 +96,7 @@ Aucun test ne nécessite PostgreSQL, de clé API ni de réseau (SQLite en mémoi
 
 ```bash
 # Backend (depuis backend/)
-uv run pytest -q                       # 22 tests
+uv run pytest -q                       # 24 tests
 uv run pytest tests/test_call_modele.py -q   # seulement la logique IA
 uv run ruff check src tests            # lint
 
@@ -137,6 +137,12 @@ Vercel                        Railway
 ```
 
 Le front n'appelle jamais la base directement : il passe par le backend, qui est seul à connaître `DATABASE_URL`. Comme les appels API partent du serveur Next (Server Actions), il n'y a pas de CORS à gérer depuis le navigateur.
+
+### 0. Déploiement existant
+
+- DB + Backend via Railway : [**`https://newsfoundry-production-74e5dc89.up.railway.app`**](https://newsfoundry-production-74e5dc89.up.railway.app)
+- EndPoint : [**`https://newsfoundry-production-74e5dc89.up.railway.app/docs`**](https://newsfoundry-production-74e5dc89.up.railway.app/docs)
+- Frontend via Vercel : [**`news-foundry-seven.vercel.app`**](news-foundry-seven.vercel.app)
 
 ### 1. Base de données et backend sur Railway
 

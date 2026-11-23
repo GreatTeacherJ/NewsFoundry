@@ -42,6 +42,7 @@ import socket  # Coupe les connexions réseau (voir _no_network plus bas).
 
 import pytest  # Fournit les fixtures et pytest.raises.
 import requests  # Parle à internet ; contient aussi le type d'erreur HTTP.
+from fastapi import HTTPException  # Exception HTTP à renvoyé au front
 from pydantic_ai.messages import ModelRequest, ModelResponse  # enveloppes de message
 from sqlalchemy.pool import StaticPool  # voir la fixture "session" plus bas
 from sqlmodel import Session, SQLModel, create_engine, select  # accès à la base
@@ -244,7 +245,7 @@ class FakeResponse:
         # Reproduit ce que fait la vraie bibliothèque requests : elle lève
         # une erreur seulement si le code est 400 ou plus.
         if self.status_code >= 400:
-            raise requests.HTTPError(f"HTTP {self.status_code}")
+            raise requests.HTTPError(f"HTTP {self.status_code}", response=self)
 
 
 def article_payload(article_id=1, url="https://exemple.fr/article-1"):
@@ -385,8 +386,13 @@ def test_call_world_new_propage_les_erreurs_http(monkeypatch):
     )
     # pytest.raises veut dire : "on s'attend à une erreur". Si aucune erreur
     # n'arrive, c'est le test lui-même qui échoue.
-    with pytest.raises(requests.HTTPError):
+    with pytest.raises(HTTPException) as excinfo:
         call_world_new(NeedSearchNews(parametres=ParamsSearchNews(text="climat")))
+
+    # L'erreur HTTP de l'API est traduite en 502 avec un message lisible :
+    # le détail technique reste dans les logs, pas dans la réponse au client.
+    assert excinfo.value.status_code == 502
+    assert excinfo.value.detail == "Erreur de World News API"
 
 
 # --------------------------------------------------------------------------- #
@@ -458,7 +464,7 @@ def test_call_modele_chat_repond_sans_source(session, discussion):
         # Le nom _ veut dire "paramètre dont je ne me sers pas".
         raise AssertionError("Aucun appel World News ne devait être fait")
 
-    result, sources = call_modele_chat(
+    result= call_modele_chat(
         "Bonjour",
         session,
         discussion.id,
@@ -469,7 +475,6 @@ def test_call_modele_chat_repond_sans_source(session, discussion):
     # Avec Pydantic, == compare le CONTENU des objets, pas leur adresse en
     # mémoire : deux objets avec les mêmes champs sont considérés égaux.
     assert result == expected
-    assert sources == []
 
 
 def test_call_modele_chat_ignore_le_message_courant_deja_en_base(session, discussion):
@@ -506,7 +511,7 @@ def test_call_modele_chat_recupere_les_news_puis_conclut(session, discussion):
         # On vérifie ainsi toute la chaîne : demande -> lecture -> sauvegarde.
         return parse_response(TOP_NEWS_PAYLOAD)
 
-    result, sources = call_modele_chat(
+    result = call_modele_chat(
         "Actualités",
         session,
         discussion.id,
@@ -517,8 +522,6 @@ def test_call_modele_chat_recupere_les_news_puis_conclut(session, discussion):
     assert result == final
     # Une seule demande, et c'est bien celle que l'IA avait rédigée.
     assert fetched == [request]
-    # "sources" est la deuxième valeur renvoyée : les articles, prêts à l'emploi.
-    assert len(sources) == 1
     # On vérifie que les articles sont vraiment enregistrés dans la base.
     assert len(session.exec(select(Source)).all()) == 1
     assert len(session.exec(select(DiscussionSource)).all()) == 1
@@ -539,7 +542,7 @@ def test_call_modele_chat_recupere_une_recherche_puis_conclut(session, discussio
     final = ResModel(kind="assistant", content="Voici les résultats")
     agent = FakeAgent([request, final])
 
-    result, sources = call_modele_chat(
+    result = call_modele_chat(
         "Cherche des news sur le climat",
         session,
         discussion.id,
@@ -549,7 +552,6 @@ def test_call_modele_chat_recupere_une_recherche_puis_conclut(session, discussio
     )
 
     assert result == final
-    assert len(sources) == 1
     assert len(session.exec(select(Source)).all()) == 1
 
 

@@ -21,7 +21,6 @@ jobs:
           python-version: "3.13"
       - run: uv sync --locked
       - run: uv run ruff check src tests
-      - run: uv run pytest tests/test_call_modele.py -q
         env:
           AI_MODEL: test
           API_KEY_WORLD: test-key

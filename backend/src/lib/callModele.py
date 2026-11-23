@@ -270,7 +270,7 @@ def call_modele_chat(
     *,
     agent: Agent | None = None,
     fetch_world_news=None,
-) -> tuple[ResModel, list[str]]:
+) -> ResModel:
     """Fait dialoguer le modèle avec l'utilisateur, en récupérant des news si besoin.
 
     `agent` et `fetch_world_news` sont injectables pour les tests : aucun appel
@@ -304,7 +304,7 @@ def call_modele_chat(
     if sources_existantes:
         followup += "\n\nDonnées déjà récupérées :\n" + "\n".join(sources_existantes)
 
-    new_sources: list[str] = []
+    
     conversation = [f"{db_messages!r}\n"]
 
     for _ in range(MAX_NEWS_ROUNDS):
@@ -313,6 +313,33 @@ def call_modele_chat(
         try:
             run = agent.run_sync(user_prompt=followup, message_history=history)
             result = run.output
+        
+
+            # On conserve l'échange complet : le modèle voit sa demande et le résultat.
+            history = run.all_messages()
+            conversation.append(f"reponse agent :\n {result!r}\n\n")
+
+            if isinstance(result, (NeedTopNews, NeedSearchNews)):
+                source = fetch_world_news(result)
+                articles = _articles_from_response(source)
+
+                # Sauvegarde dans la base
+                save_article(articles, session, discussion_id)
+                serialized = [article.model_dump(mode="json") for article in articles]
+                conversation.append(
+                    "source reçu : \n" + json.dumps(serialized, ensure_ascii=False) + "\n\n"
+                )
+                
+                # On renvoie le résultat au modèle en lui demandant de conclure.
+                followup = (
+                    f"Résultat de l'appel {result.kind} :\n"
+                    f"{json.dumps(serialized, ensure_ascii=False)}\n\n"
+                    f"Tu as maintenant les données nécessaires pour répondre à : {prompt}\n"
+                    "N'appelle plus l'API : réponds avec une sortie assistant ou reviews."
+                )
+            elif isinstance(result, ResModel):
+                return result
+
         except ModelHTTPError as e:
             logger.warning("Erreur lors de l'appel du modèle (HTTP %s) : %s", e.status_code, e)
             if e.status_code == 429:
@@ -334,32 +361,6 @@ def call_modele_chat(
                 detail="Réponse invalide du modèle IA",
             ) from e
 
-        # On conserve l'échange complet : le modèle voit sa demande et le résultat.
-        history = run.all_messages()
-        conversation.append(f"reponse agent :\n {result!r}\n\n")
-
-        if isinstance(result, (NeedTopNews, NeedSearchNews)):
-            source = fetch_world_news(result)
-            articles = _articles_from_response(source)
-
-            # Sauvegarde dans la base
-            save_article(articles, session, discussion_id)
-            serialized = [article.model_dump(mode="json") for article in articles]
-            conversation.append(
-                "source reçu : \n" + json.dumps(serialized, ensure_ascii=False) + "\n\n"
-            )
-            new_sources.append(json.dumps(serialized, ensure_ascii=False))
-
-            # On renvoie le résultat au modèle en lui demandant de conclure.
-            followup = (
-                f"Résultat de l'appel {result.kind} :\n"
-                f"{json.dumps(serialized, ensure_ascii=False)}\n\n"
-                f"Tu as maintenant les données nécessaires pour répondre à : {prompt}\n"
-                "N'appelle plus l'API : réponds avec une sortie assistant ou reviews."
-            )
-        elif isinstance(result, ResModel):
-            return result, new_sources
-
     logger.warning(
         "Trop de demandes de news successives (%s). Conversation :\n%s",
         MAX_NEWS_ROUNDS,
@@ -367,10 +368,7 @@ def call_modele_chat(
     )
 
     # Le modèle boucle sur ses appels : c'est un défaut de notre côté, pas du client
-    raise HTTPException(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Trop de demandes de news successives",
-    )
+    raise RuntimeError("Trop de demandes de news successives" )
 
 
 def call_world_new(result: NeedTopNews | NeedSearchNews) -> NewsApiResponse:
@@ -403,6 +401,9 @@ def call_world_new(result: NeedTopNews | NeedSearchNews) -> NewsApiResponse:
         )
         # Lève HTTPError pour tout statut 4xx/5xx
         res.raise_for_status()
+
+        logger.debug("Réponse World News API OK (%s)", res.status_code)
+        return parse_response(res.json())
     except requests.Timeout as e:
         logger.warning("World News API : timeout : %s", e)
         raise HTTPException(
@@ -425,5 +426,4 @@ def call_world_new(result: NeedTopNews | NeedSearchNews) -> NewsApiResponse:
             detail="World News API injoignable",
         ) from e
 
-    logger.debug("Réponse World News API OK (%s)", res.status_code)
-    return parse_response(res.json())
+    
