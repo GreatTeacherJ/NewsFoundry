@@ -96,7 +96,7 @@ Aucun test ne nécessite PostgreSQL, de clé API ni de réseau (SQLite en mémoi
 
 ```bash
 # Backend (depuis backend/)
-uv run pytest -q                       # 22 tests
+uv run pytest -q                       # 24 tests
 uv run pytest tests/test_call_modele.py -q   # seulement la logique IA
 uv run ruff check src tests            # lint
 
@@ -126,17 +126,76 @@ Le détail (IA, base de données, reprise des conversations) est dans [`backend/
 
 ## Déploiement
 
-- **Frontend** : Vercel, avec `BACKEND_URL` pointant vers l'origine HTTPS de l'API.
-- **Backend** : Railway (ou tout hébergeur Docker). `backend/Dockerfile` doit être construit avec **la racine du dépôt** comme contexte (ses `COPY` commencent par `backend/`) :
+En production, l'application est répartie sur deux plateformes :
 
-  ```bash
-  docker build -f backend/Dockerfile -t newsfoundry-api .
-  ```
+```text
+Vercel                        Railway
+┌──────────────────────┐      ┌──────────────────────┐      ┌──────────────────┐
+│ Frontend Next.js     │ ───► │ Backend FastAPI      │ ───► │ PostgreSQL       │
+│ (Server Actions)     │ HTTPS│ (conteneur Docker)   │      │ (service Railway)│
+└──────────────────────┘      └──────────────────────┘      └──────────────────┘
+```
 
-  Définir `DATABASE_URL`, `JWT_SECRET_KEY`, `JWT_ACCESS_TOKEN_MINUTES`, `FRONTEND_ORIGINS`, `AI_MODEL`, `MAMMOUTH_KEY` et `API_KEY_WORLD`.
-- Utiliser un secret JWT unique et aléatoire, activer HTTPS, ne pas utiliser SQLite en production.
+Le front n'appelle jamais la base directement : il passe par le backend, qui est seul à connaître `DATABASE_URL`. Comme les appels API partent du serveur Next (Server Actions), il n'y a pas de CORS à gérer depuis le navigateur.
 
-Aucune URL de déploiement n'est disponible à ce stade ; l'ajouter ici après publication.
+### 0. Déploiement existant
+
+- DB + Backend via Railway : [**`https://newsfoundry-production-74e5dc89.up.railway.app`**](https://newsfoundry-production-74e5dc89.up.railway.app)
+- EndPoint : [**`https://newsfoundry-production-74e5dc89.up.railway.app/docs`**](https://newsfoundry-production-74e5dc89.up.railway.app/docs)
+- Frontend via Vercel : [**`news-foundry-seven.vercel.app`**](news-foundry-seven.vercel.app)
+
+### 1. Base de données et backend sur Railway
+
+1. Créer un projet Railway, puis **New → Database → PostgreSQL**. Railway expose la variable `DATABASE_URL` du service Postgres (format `postgresql://...`) ; elle est normalisée automatiquement en `postgresql+psycopg2://` par `backend/src/database.py`, inutile de la réécrire.
+2. **New → GitHub Repo**, sélectionner ce dépôt. Le fichier [`railway.json`](railway.json) impose le builder `DOCKERFILE` avec `backend/Dockerfile`. Ce Dockerfile attend **la racine du dépôt** comme contexte (ses `COPY` commencent par `backend/`) : ne pas changer le *Root Directory* du service.
+3. Dans l'onglet **Variables** du service backend, définir :
+
+   | Variable | Valeur en production |
+   | --- | --- |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (référence au service Postgres) |
+   | `JWT_SECRET_KEY` | secret aléatoire long, par ex. `openssl rand -hex 32` — **jamais** celui du `.env` local |
+   | `JWT_ACCESS_TOKEN_MINUTES` | `480` (ou moins) |
+   | `FRONTEND_ORIGINS` | URL de production du front Vercel, ex. `https://newsfoundry.vercel.app` |
+   | `AI_MODEL` | modèle réel (toute valeur autre que `test`) |
+   | `MAMMOUTH_KEY` | clé Mammouth AI |
+   | `API_KEY_WORLD` | clé World News API |
+   | `APP_TIMEZONE` | `Europe/Paris` |
+   | `MLFLOW_ENABLED` | `false` (tracing désactivé en production) |
+
+   `PORT` est fourni par Railway et lu par `src/main.py` ; ne pas le fixer à la main.
+4. **Settings → Networking → Generate Domain** pour obtenir une URL publique HTTPS.
+5. Vérifier le déploiement : `curl https://<backend>.up.railway.app/health` doit renvoyer `{"status":"ok"}`, et `/docs` doit afficher Swagger. Les tables sont créées automatiquement au démarrage (lifespan → `init_db()`).
+6. Optionnel : indiquer `/health` comme *Healthcheck Path* dans les réglages du service.
+
+Pour reproduire l'image en local depuis **la racine du dépôt** :
+
+```bash
+docker build -f backend/Dockerfile -t newsfoundry-api .
+```
+
+### 2. Frontend sur Vercel
+
+1. **Add New → Project**, importer ce dépôt.
+2. **Root Directory** : `frontend/` (Framework détecté : Next.js). Le build par défaut (`npm run build`, avec `--webpack` dans le script) est conservé. Le `vercel.json` de la racine décrit un déploiement à deux services : en déployant uniquement le front, définir le *Root Directory* sur `frontend/` pour l'ignorer.
+3. **Environment Variables** : `BACKEND_URL=https://<backend>.up.railway.app` — origine complète, **sans slash final**, pour Production, Preview et Development.
+4. Déployer, puis récupérer le domaine de production (`https://<projet>.vercel.app`).
+5. Revenir sur Railway et mettre ce domaine dans `FRONTEND_ORIGINS` (plusieurs origines possibles, séparées par des virgules, par ex. l'URL de production et une URL de preview stable), puis redéployer le backend.
+
+Le cookie de session est `httpOnly` et `secure` en production : l'accès doit donc se faire en **HTTPS** des deux côtés.
+
+### 3. Ordre de mise en ligne et vérifications
+
+1. Railway : Postgres → backend → domaine public → `/health` OK.
+2. Vercel : front avec `BACKEND_URL` → domaine de production.
+3. Railway : `FRONTEND_ORIGINS` = domaine Vercel → redéploiement.
+4. Test de bout en bout : création de compte, envoi d'un message, génération puis relecture d'une revue de presse dans `/reviews`.
+
+### 4. Points de vigilance
+
+- **Pas de migrations** : `init_db()` ne fait qu'un `create_all`, il ne modifie pas les tables existantes. Toute évolution des modèles demande une intervention manuelle sur la base Railway (ou l'ajout d'Alembic).
+- **Pas de SQLite en production** : sans `DATABASE_URL`, le backend retombe sur un fichier SQLite local, perdu à chaque redéploiement du conteneur.
+- **Secret JWT** : unique, aléatoire, stocké uniquement dans les variables Railway. Le changer invalide toutes les sessions en cours.
+- **URLs** : documenter ici les domaines une fois publiés, par ex. `https://<projet>.vercel.app` (front) et `https://<backend>.up.railway.app` (API).
 
 ## Qualité de l'IA
 
@@ -148,6 +207,13 @@ Voir aussi [`docs/analyse-performance.md`](docs/analyse-performance.md) : regard
 
 Le prompt système est optimisé pour l'utilisation de l'application, voir [`backend/src/lib/prompt_systeme.py`](backend/src/lib/prompt_systeme.py).
 Il définit le comportement, le ton et le format de réponse.
+
+Pour que le modèle puisse demander des informations à `World News API`, son type de sortie est strictement défini. Ce type de sortie autorise 4 cas, gérés dans la fonction [`backend/src/lib/callModele.py`](backend/src/lib/callModele.py). Ils sont communiqués au modèle via le prompt système et via le paramètre `output_type` de l'agent PydanticAI :
+
+- **`assistant`** : la réponse est renvoyée directement au front.
+- **`reviews`** ou **`top-news`** : un appel à World News API est effectué, puis le modèle est rappelé avec les nouvelles données.
+- **`review`** : la réponse est enregistrée en base de données comme revue de presse, puis renvoyée au front, qui sait qu'il s'agit d'une revue de presse et adapte l'affichage.
+- **Tout autre type de sortie** : une erreur est levée et un message d'erreur est envoyé au front, qui l'affiche.
 
 ## Choix
 

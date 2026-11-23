@@ -1,0 +1,16 @@
+// Réglages VS Code quand tu ouvres directement le dossier "backend".
+// (Si tu ouvres la racine du dépôt, c'est ../.vscode/settings.json qui sert.)
+{
+  // Le Python du projet, installé par uv dans backend/.venv.
+  "python.defaultInterpreterPath": ".venv/bin/python",
+
+  // Racine des imports : l'équivalent de ce que fait tests/conftest.py au moment
+  // de l'exécution. Sans cette ligne, Pylance ne sait pas où trouver "lib",
+  // "models", "routers" et affiche des soulignements rouges.
+  "python.analysis.extraPaths": ["./src"],
+
+  // Tests : pytest est activé, il cherche dans le dossier tests/.
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"]
+}

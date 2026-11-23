@@ -30,6 +30,7 @@ uv run --env-file .env src/main.py
 - `init_db()` (création des tables avec `SQLModel.metadata.create_all`) n'est appelé que dans le bloc `__main__` de `src/main.py`. Si vous lancez l'application autrement (`uvicorn main:app`), les tables ne sont pas créées. Il n'y a **pas de système de migration** : un changement de modèle sur une base existante demande une intervention manuelle.
 - Les variables d'environnement sont détaillées dans le [README racine](../README.md#variables-denvironnement).
 - Image Docker : à construire depuis la **racine du dépôt** (`docker build -f backend/Dockerfile -t newsfoundry-api .`).
+- Production : service **Railway** (builder Dockerfile via `railway.json`) avec un service **PostgreSQL** Railway. Variables, domaine public et vérifications : [README racine → Déploiement](../README.md#déploiement).
 
 ### Mode sans clé (`AI_MODEL=test`)
 
@@ -80,7 +81,7 @@ Toutes les routes, sauf `/`, `/auth/register` et `/auth/login`, exigent `Authori
 | `GET`, `PATCH`, `DELETE` | `/press-reviews/{id}` | Lire, modifier, supprimer |
 | `POST` | `/chats?prompt=...` | Stub : renvoie `{"content": "message reçu"}` |
 
-Codes d'erreur : `401` jeton absent/invalide ou identifiants incorrects, `404` ressource inexistante **ou appartenant à un autre utilisateur**, `409` email déjà utilisé ou revue demandée sans réponse `reviews` dans la discussion, `422` validation, `502` échec de l'IA ou de World News API (le message utilisateur n'est alors pas conservé), `503` `JWT_SECRET_KEY` non configuré.
+Codes d'erreur : `401` jeton absent/invalide ou identifiants incorrects, `404` ressource inexistante **ou appartenant à un autre utilisateur**, `409` email déjà utilisé ou revue demandée sans réponse `reviews` dans la discussion, `422` validation, `429` quota du modèle IA atteint, `502` panne ou réponse illisible du modèle / de World News API (ou erreur inattendue), `503` `JWT_SECRET_KEY` non configuré, `504` World News API trop lente. En cas d'échec de l'IA, le message utilisateur n'est pas conservé.
 
 ## Base de données
 
@@ -166,12 +167,69 @@ flowchart TD
     G --> M[Réponse enregistrée, discussion.updated_at mis à jour, commit]
 ```
 
+Pour que le modèle puisse demander des informations à `World News API`, son type de sortie est strictement défini. Ce type de sortie autorise 4 cas, gérés dans la fonction [`backend/src/lib/callModele.py`](backend/src/lib/callModele.py). Ils sont communiqués au modèle via le prompt système et via le paramètre `output_type` de l'agent PydanticAI :
+
+- **`assistant`** : la réponse est renvoyée directement au front.
+- **`reviews`** ou **`top-news`** : un appel à World News API est effectué, puis le modèle est rappelé avec les nouvelles données.
+- **`review`** : la réponse est enregistrée en base de données comme revue de presse, puis renvoyée au front, qui sait qu'il s'agit d'une revue de presse et adapte l'affichage.
+- **Tout autre type de sortie** : une erreur est levée et un message d'erreur est envoyé au front, qui l'affiche.
+
 1. L'historique est chargé et converti au format PydanticAI.
 2. Les sources déjà associées à la discussion sont ajoutées au prompt sous « Données déjà récupérées ».
 3. L'agent répond. S'il demande des actualités, `call_world_new` interroge `https://api.worldnewsapi.com/{top-news|search-news}` (en-tête `x-api-key`, timeout 50 s), la réponse est validée par Pydantic (`parse_response`), les articles sont enregistrés (`save_article`) puis renvoyés au modèle avec l'instruction de conclure sans rappeler l'API.
 4. **Maximum 3 tours** (`MAX_NEWS_ROUNDS`). Au-delà, une `RuntimeError` est levée.
 5. La dernière réponse (`assistant` ou `reviews`) est stockée comme message.
-6. Si une étape échoue (modèle, World News API, limite de 3 tours), l'exception est journalisée, la transaction annulée, le message utilisateur retiré et l'API répond `502`.
+6. Si une étape échoue (modèle, World News API, limite de 3 tours), l'exception est journalisée, la transaction annulée, le message utilisateur retiré et l'API répond suivant l'érreur.
+
+## Erreurs HTTP renvoyées par le service de chat
+
+Les fonctions `call_modele_chat` et `call_world_new` lèvent des `HTTPException`
+lorsqu'un service externe (modèle IA ou World News API) échoue. `create_message`
+(`routers/base.py`) les **relance telles quelles** après rollback et suppression
+du message utilisateur : le statut et le `detail` arrivent donc au client sans
+être réécrits. Toute autre exception tombe dans le filet de sécurité du routeur,
+qui répond `502` avec un message générique. Le détail technique (code d'origine,
+message) reste dans les logs ; le corps de la réponse amont n'est jamais renvoyé.
+
+### Erreurs liées au modèle IA (`call_modele_chat`)
+
+| Code | Nom | Message (`detail`) | Cause | Action côté client |
+|------|-----|--------------------|-------|--------------------|
+| 429 | Too Many Requests | Limite de requêtes du modèle IA atteinte | Le fournisseur du modèle a renvoyé un 429 (quota dépassé) | Réessayer plus tard |
+| 502 | Bad Gateway | Erreur du service du modèle IA | Le fournisseur a renvoyé une autre erreur HTTP (dont 401 : clé API du serveur invalide, 5xx : panne) | Réessayer plus tard ; si persistant, contacter l'administrateur |
+| 502 | Bad Gateway | Réponse invalide du modèle IA | Le modèle a produit une sortie inexploitable (`UnexpectedModelBehavior`, dont `ContentFilterError`) | Reformuler la demande ou réessayer |
+
+### Erreurs liées à World News API (`call_world_new`)
+
+| Code | Nom | Message (`detail`) | Cause | Action côté client |
+|------|-----|--------------------|-------|--------------------|
+| 504 | Gateway Timeout | World News API met trop de temps à répondre | Aucune réponse dans le délai de 50 s (`requests.Timeout`) | Réessayer plus tard |
+| 502 | Bad Gateway | Erreur de World News API | L'API a renvoyé un statut 4xx/5xx (dont 401 : clé API du serveur invalide) | Réessayer plus tard ; si persistant, contacter l'administrateur |
+| 502 | Bad Gateway | World News API injoignable | Erreur réseau (DNS, connexion refusée, etc.) **ou réponse non JSON** : `requests.RequestException`, dont `JSONDecodeError` levé par `res.json()` | Réessayer plus tard |
+
+### Erreurs non prévues (filet de sécurité de `create_message`)
+
+| Code | Nom | Message (`detail`) | Cause | Action côté client |
+|------|-----|--------------------|-------|--------------------|
+| 502 | Bad Gateway | L’assistant n’a pas pu répondre pour le moment. Réessayez dans un instant. | Erreur réseau vers le modèle (`ModelConnectionError`, `ModelTimeoutError`), `ValidationError` de `parse_response`, boucle de news dépassée (`RuntimeError` après `MAX_NEWS_ROUNDS`), erreur SQL ou bug inattendu | Réessayer plus tard ; si persistant, contacter l'administrateur |
+
+### Remarques
+
+- **Rôle de chaque couche :** `call_modele_chat` et `call_world_new` choisissent le
+  statut ; `create_message` le propage sans le modifier ; le `except Exception`
+  du routeur ne concerne que les cas non prévus et renvoie le `502` générique.
+- **Un 401 de l'API amont n'est jamais renvoyé tel quel au client.** Il signifie
+  que la clé API *du serveur* est invalide, pas que l'utilisateur est mal
+  authentifié. Il est converti en 502 et le code d'origine reste visible dans
+  les logs.
+- **Nettoyage garanti :** en cas d'échec, quel que soit le statut, le message
+  utilisateur est retiré (rollback puis suppression de l'orphelin) par le bloc
+  `finally` de `create_message`.
+- **Distinction 4xx / 5xx :** seul le 429 est de la responsabilité du client
+  (volume de requêtes). Toutes les autres erreurs sont de la responsabilité du
+  serveur ou de ses dépendances.
+- **Aucun retry automatique** n'est effectué : c'est au client de relancer la
+  requête.
 
 ### « Pseudo RAG » : réutilisation des sources
 
@@ -197,7 +255,7 @@ Ce qui est **persisté** : les messages `user` et la réponse finale `assistant`
 ## Tests
 
 ```bash
-uv run pytest -q                             # tous les tests (22)
+uv run pytest -q                             # tous les tests (24)
 uv run pytest tests/test_call_modele.py -q   # logique IA seule
 uv run pytest tests/test_api.py -q           # endpoints seuls
 uv run pytest -k isolated -q                 # un test par nom
