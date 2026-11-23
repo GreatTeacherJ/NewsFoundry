@@ -71,11 +71,11 @@ src/
 2. `POST /discussions/{id}/messages` renvoie `[message_utilisateur, réponse_ia]` ; les deux sont ajoutés à la liste affichée. Pendant l'attente (la réponse IA peut prendre plusieurs secondes) un indicateur de chargement s'affiche et l'envoi est bloqué.
 3. En ouvrant `/chat/{id}`, l'historique est rechargé via `GET /discussions/{id}/messages` : une conversation reprend donc là où elle s'est arrêtée, y compris après rechargement de la page.
 4. Les messages sont rendus en **Markdown** (`react-markdown` + `remark-gfm`). Les trois rôles (`user`, `assistant`, `reviews`) ont des styles distincts.
-5. Le bouton « Générer une revue de presse » (visible dans une discussion existante) vérifie qu'un message `reviews` existe, appelle `POST /discussions/{id}/press-reviews`, puis redirige vers `/reviews`. Sinon il invite à demander une revue à l'assistant.
+5. Le bouton « Générer une revue de presse » (visible dans une discussion existante) va récupérer la dérniére revue de presse qui à été génrérer dans la discution, qui sera récupérer de la DB et crée une revue de presse.
 6. La barre latérale (`AppShell`) recharge la liste des discussions à chaque changement de page.
 
 Le champ « Thème » de la fenêtre de génération de revue n'est pas encore relié : le titre de la revue est construit par le backend (« Revue de presse — {titre de la discussion} »).
 
 ## Déploiement
 
-Déployer ce dossier sur Vercel et définir `BACKEND_URL` sur l'URL HTTPS de l'API. Côté backend, ajouter l'origine du site dans `FRONTEND_ORIGINS`.
+Hébergé sur **Vercel** (Root Directory : `frontend/`), avec `BACKEND_URL` pointant vers l'URL HTTPS de l'API déployée sur Railway. Côté backend, ajouter le domaine du site dans `FRONTEND_ORIGINS`. Procédure complète : [README racine → Déploiement](../README.md#déploiement).

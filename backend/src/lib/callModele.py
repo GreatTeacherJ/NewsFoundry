@@ -9,8 +9,10 @@ from urllib.parse import urlencode
 import mlflow
 import requests
 from dotenv import load_dotenv  # uv add python-dotenv
+from fastapi import HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 from pydantic_ai import Agent
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
@@ -284,7 +286,7 @@ def call_modele_chat(
         .order_by(Message.created_at, Message.id)
     ).all()
 
-    # Le message courant est parfois déjà en base (flush avant l'appel) : on
+    # Le message courant est parfois déjà en base : on
     # l'exclut de l'historique pour ne pas le dupliquer avec `user_prompt`.
     if db_messages and db_messages[-1].role == "user" and db_messages[-1].content == prompt:
         db_messages = db_messages[:-1]
@@ -308,8 +310,29 @@ def call_modele_chat(
     for _ in range(MAX_NEWS_ROUNDS):
         conversation.append(followup + "\n\n")
 
-        run = agent.run_sync(user_prompt=followup, message_history=history)
-        result = run.output
+        try:
+            run = agent.run_sync(user_prompt=followup, message_history=history)
+            result = run.output
+        except ModelHTTPError as e:
+            logger.warning("Erreur lors de l'appel du modèle (HTTP %s) : %s", e.status_code, e)
+            if e.status_code == 429:
+                # Le quota du modèle est dépassé : le client peut réessayer plus tard
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Limite de requêtes du modèle IA atteinte",
+                ) from e
+            # Inclut le 401 : la clé du serveur est invalide, ce n'est pas la faute
+            # de l'utilisateur, donc on ne renvoie pas 401 au frontend
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Erreur du service du modèle IA",
+            ) from e
+        except UnexpectedModelBehavior as e:
+            logger.warning("Réponse inattendue du modèle : %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Réponse invalide du modèle IA",
+            ) from e
 
         # On conserve l'échange complet : le modèle voit sa demande et le résultat.
         history = run.all_messages()
@@ -342,10 +365,21 @@ def call_modele_chat(
         MAX_NEWS_ROUNDS,
         "".join(conversation),
     )
-    raise RuntimeError("Trop de demandes de news successives")
+
+    # Le modèle boucle sur ses appels : c'est un défaut de notre côté, pas du client
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Trop de demandes de news successives",
+    )
 
 
 def call_world_new(result: NeedTopNews | NeedSearchNews) -> NewsApiResponse:
+    """Appelle World News API et renvoie la réponse parsée.
+
+    Raises:
+        HTTPException: 504 si l'API ne répond pas à temps, 502 pour toute autre
+            erreur venant de l'API (HTTP ou réseau).
+    """
     params = result.parametres
 
     # Récupération des paramètres avec les noms alias
@@ -360,12 +394,36 @@ def call_world_new(result: NeedTopNews | NeedSearchNews) -> NewsApiResponse:
     url = f"https://api.worldnewsapi.com/{result.kind}?{urlencode(data)}"
     logger.debug("Appel World News API : %s", url)
 
-    # On récupère les infos de World News API
-    res = requests.get(
-        url,
-        headers={"x-api-key": os.getenv("API_KEY_WORLD", "")},
-        timeout=50,
-    )
-    res.raise_for_status()
+    try:
+        # On récupère les infos de World News API
+        res = requests.get(
+            url,
+            headers={"x-api-key": os.getenv("API_KEY_WORLD", "")},
+            timeout=50,
+        )
+        # Lève HTTPError pour tout statut 4xx/5xx
+        res.raise_for_status()
+    except requests.Timeout as e:
+        logger.warning("World News API : timeout : %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="World News API met trop de temps à répondre",
+        ) from e
+    except requests.HTTPError as e:
+        # Le 401 ici = notre clé API est invalide : on le log, mais le client
+        # reçoit quand même un 502 (ce n'est pas son authentification)
+        logger.warning("World News API : erreur HTTP %s : %s", e.response.status_code, e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Erreur de World News API",
+        ) from e
+    except requests.RequestException as e:
+        # Filet de sécurité : ConnectionError, etc. (doit rester en dernier)
+        logger.warning("World News API : erreur réseau : %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="World News API injoignable",
+        ) from e
+
     logger.debug("Réponse World News API OK (%s)", res.status_code)
     return parse_response(res.json())
