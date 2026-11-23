@@ -1,3 +1,11 @@
+# Déploiement 
+
+(Pour plus d'information voir [`README`](../README.md#deploiement)
+
+- DB + Backend via Railway : [**`https://newsfoundry-production-74e5dc89.up.railway.app`**](https://newsfoundry-production-74e5dc89.up.railway.app)
+- EndPoint : [**`https://newsfoundry-production-74e5dc89.up.railway.app/docs`**](https://newsfoundry-production-74e5dc89.up.railway.app/docs)
+- Frontend via Vercel : [**`news-foundry-seven.vercel.app`**](news-foundry-seven.vercel.app)
+
 # Réduire les tokens des appels LLM
 
 ## TL;DR

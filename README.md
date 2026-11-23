@@ -27,6 +27,7 @@ Assistant de veille et de synthèse d'actualité destiné aux médias et aux jou
 | [`backend/`](backend/README.md) | API FastAPI, base de données SQLModel, agent IA | [backend/README.md](backend/README.md) |
 | [`frontend/`](frontend/README.md) | Interface Next.js (connexion, chat, revues) | [frontend/README.md](frontend/README.md) |
 | [`docs/`](docs/ai-quality.md) | Protocole d'évaluation de la qualité IA | [docs/ai-quality.md](docs/ai-quality.md) |
+| [`docs/`](docs/optimisation-tokens-llm.md) | Proposition d'amélioration| [docs/optimisation-tokens-llm.md](docs/optimisation-tokens-llm.md) |
 
 Les deux projets sont indépendants : il n'y a pas de lanceur à la racine, chaque commande se lance depuis `backend/` ou `frontend/`.
 
@@ -124,7 +125,7 @@ Le détail (IA, base de données, reprise des conversations) est dans [`backend/
 - Ne jamais mélanger des demandes différentes : le modèle pourrait produire des sorties erronées et le coût d'un appel pourrait fortement augmenter.
 - Pensez à cliquer sur « Générer une revue de presse » pour qu'elle soit enregistrée dans la base de données et visible dans vos revues de presse.
 
-## Déploiement
+## Deploiement
 
 En production, l'application est répartie sur deux plateformes :
 
@@ -138,7 +139,6 @@ Vercel                        Railway
 
 Le front n'appelle jamais la base directement : il passe par le backend, qui est seul à connaître `DATABASE_URL`. Comme les appels API partent du serveur Next (Server Actions), il n'y a pas de CORS à gérer depuis le navigateur.
 
-### 0. Déploiement existant
 
 - DB + Backend via Railway : [**`https://newsfoundry-production-74e5dc89.up.railway.app`**](https://newsfoundry-production-74e5dc89.up.railway.app)
 - EndPoint : [**`https://newsfoundry-production-74e5dc89.up.railway.app/docs`**](https://newsfoundry-production-74e5dc89.up.railway.app/docs)
